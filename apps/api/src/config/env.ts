@@ -1,6 +1,7 @@
 export type EnvConfig = {
   port: number;
   appOrigin: string;
+  adminSyncKey: string;
   whatsappAccessToken: string;
   whatsappPhoneNumberId: string;
   whatsappVerifyToken: string;
@@ -29,6 +30,7 @@ export const loadEnv = (): EnvConfig => {
   return {
     port: parseIntWithFallback(process.env.PORT, 4001),
     appOrigin: process.env.APP_ORIGIN ?? "http://localhost:5173",
+    adminSyncKey: process.env.ADMIN_SYNC_KEY ?? "",
     whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN ?? "",
     whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? "",
     whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? "dev_verify_token",

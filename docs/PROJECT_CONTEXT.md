@@ -20,6 +20,7 @@ Proyecto: `whatsapp-crm-compliant`
    - Estado por workspace.
    - Renovacion mensual (S/50 base) por endpoint.
    - Bloqueo del CRM cuando vence la suscripcion.
+   - Sincronizacion administrativa server-to-server por email (`POST /api/v1/admin/sync-subscription`) para activar/desactivar acceso desde superadmin externo.
 3. Leads:
    - Alta con consentimiento.
    - Upsert por telefono (`POST /api/v1/leads/upsert`) para evitar duplicados al operar desde WhatsApp Web.

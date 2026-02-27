@@ -173,6 +173,53 @@ Request:
 }
 ```
 
+## Admin Sync (server-to-server)
+
+### `POST /api/v1/admin/sync-subscription`
+
+Header requerido:
+
+- `x-admin-sync-key: <ADMIN_SYNC_KEY>`
+
+Request:
+
+```json
+{
+  "email": "agencia@test.com",
+  "enabled": true,
+  "months": 1
+}
+```
+
+Reglas:
+
+- `email` debe existir en usuarios del CRM Extension.
+- `enabled=true` activa suscripcion y extiende periodo por `months` (default `1`).
+- `enabled=false` marca suscripcion en `past_due` y bloquea acceso CRM.
+
+Response `200`:
+
+```json
+{
+  "ok": true,
+  "email": "agencia@test.com",
+  "userId": "usr_...",
+  "workspaceId": "ws_...",
+  "subscription": {
+    "subscriptionStatus": "active",
+    "currentPeriodStart": "2026-02-27T15:00:00.000Z",
+    "currentPeriodEnd": "2026-03-29T15:00:00.000Z",
+    "canUseCrm": true
+  }
+}
+```
+
+Posibles errores:
+
+- `401 UNAUTHORIZED` si falta o no coincide `x-admin-sync-key`.
+- `404 NOT_FOUND` si no existe usuario/workspace para ese email.
+- `503 INTERNAL_ERROR` si el servidor no tiene `ADMIN_SYNC_KEY` configurado.
+
 Response `200`:
 
 ```json
@@ -447,3 +494,8 @@ Lista de eventos recientes (debug MVP).
 - Cambio: se agregan `POST /api/v1/leads/upsert` y `PATCH /api/v1/leads/:leadId` para flujo CRM embebido en WhatsApp Web
 - Tipo: non-breaking
 - Impacto: permite crear/actualizar leads por telefono, enriqueciendo etapa/consentimiento/tags sin duplicar contactos
+
+- Fecha: 2026-02-27
+- Cambio: se agrega `POST /api/v1/admin/sync-subscription` para activacion/desactivacion server-to-server desde superadmin externo
+- Tipo: non-breaking
+- Impacto: sincroniza estado comercial del superadmin con el acceso real del CRM Extension por email

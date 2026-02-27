@@ -2,9 +2,13 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import { Router } from "express";
+import { z } from "zod";
 import { loadEnv } from "./config/env.js";
+import { addDays } from "./core/time.js";
 import { errorHandler, notFoundHandler } from "./core/error-middleware.js";
+import { AppError } from "./core/errors.js";
 import { requestIdMiddleware } from "./core/request-id.js";
+import { asyncHandler } from "./core/http.js";
 import { AuthController } from "./modules/auth/auth.controller.js";
 import { createAuthMiddleware, subscriptionGuardMiddleware } from "./modules/auth/auth.middleware.js";
 import { AuthRepository } from "./modules/auth/auth.repository.js";
@@ -113,6 +117,97 @@ export const createApp = () => {
   app.use("/health", createHealthRouter());
   app.use("/api/v1/auth", createAuthRouter(authController, authMiddleware));
   app.use("/api/v1/billing", createBillingRouter(billingController, authMiddleware));
+
+  const adminSyncSchema = z.object({
+    email: z.string().trim().email().max(180),
+    enabled: z.boolean(),
+    months: z.number().int().min(1).max(12).optional(),
+  });
+  const adminRouter = Router();
+  adminRouter.post(
+    "/sync-subscription",
+    asyncHandler(async (req, res) => {
+      if (!env.adminSyncKey) {
+        throw new AppError({
+          statusCode: 503,
+          code: "INTERNAL_ERROR",
+          message: "ADMIN_SYNC_KEY no configurado",
+        });
+      }
+
+      const syncKey = String(req.header("x-admin-sync-key") || "").trim();
+      if (!syncKey || syncKey !== env.adminSyncKey) {
+        throw new AppError({
+          statusCode: 401,
+          code: "UNAUTHORIZED",
+          message: "x-admin-sync-key invalido",
+        });
+      }
+
+      const payload = adminSyncSchema.parse(req.body);
+      const user = await authRepository.findUserByEmail(payload.email);
+      if (!user) {
+        throw new AppError({
+          statusCode: 404,
+          code: "NOT_FOUND",
+          message: "Usuario CRM Extension no encontrado para ese email",
+        });
+      }
+
+      const workspace = await authRepository.findWorkspaceById(user.workspaceId);
+      if (!workspace) {
+        throw new AppError({
+          statusCode: 404,
+          code: "NOT_FOUND",
+          message: "Workspace no encontrado",
+        });
+      }
+
+      const nowIso = new Date().toISOString();
+      const months = payload.months ?? 1;
+      let patch;
+      if (payload.enabled) {
+        const currentEndTime = new Date(workspace.currentPeriodEnd).getTime();
+        const baseIso = currentEndTime > Date.now() ? workspace.currentPeriodEnd : nowIso;
+        const extensionDays = env.billingPeriodDays * months;
+        patch = {
+          subscriptionStatus: "active" as const,
+          currentPeriodStart: nowIso,
+          currentPeriodEnd: addDays(baseIso, extensionDays),
+          lastPaymentAt: nowIso,
+        };
+      } else {
+        patch = {
+          subscriptionStatus: "past_due" as const,
+          currentPeriodEnd: new Date(Date.now() - 60 * 1000).toISOString(),
+        };
+      }
+
+      const updated = await authRepository.updateWorkspace(workspace.id, patch);
+      if (!updated) {
+        throw new AppError({
+          statusCode: 500,
+          code: "INTERNAL_ERROR",
+          message: "No se pudo sincronizar suscripcion",
+        });
+      }
+
+      const isInPeriod = new Date(updated.currentPeriodEnd).getTime() > Date.now();
+      res.status(200).json({
+        ok: true,
+        email: user.email,
+        userId: user.id,
+        workspaceId: updated.id,
+        subscription: {
+          subscriptionStatus: updated.subscriptionStatus,
+          currentPeriodStart: updated.currentPeriodStart,
+          currentPeriodEnd: updated.currentPeriodEnd,
+          canUseCrm: updated.subscriptionStatus === "active" && isInPeriod,
+        },
+      });
+    }),
+  );
+  app.use("/api/v1/admin", adminRouter);
 
   const crmRouter = Router();
   crmRouter.use(authMiddleware);

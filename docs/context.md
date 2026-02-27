@@ -57,6 +57,8 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Billing:
   - `GET /api/v1/billing/subscription`
   - `POST /api/v1/billing/renew`
+- Admin sync:
+  - `POST /api/v1/admin/sync-subscription` (header `x-admin-sync-key`)
 - Templates:
   - `POST /api/v1/templates`
   - `GET /api/v1/templates`
@@ -76,6 +78,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 
 - `PORT`
 - `APP_ORIGIN` (uno o varios origins separados por coma para front web)
+- `ADMIN_SYNC_KEY` (token server-to-server para sincronizacion segura desde superadmin externo)
 - `WHATSAPP_ACCESS_TOKEN`
 - `WHATSAPP_PHONE_NUMBER_ID`
 - `WHATSAPP_VERIFY_TOKEN`
@@ -106,6 +109,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Recordatorios vencidos disparan notificacion local en Chrome (polling por `chrome.alarms`), con deduplicacion local para evitar alertas repetidas.
 - Seguimientos asistidos desde panel embebido mantienen limite diario local (`20`) y no ejecutan envio automatico.
 - CORS restringido por `APP_ORIGIN`.
+- El endpoint `POST /api/v1/admin/sync-subscription` no usa sesion de usuario; exige secreto `x-admin-sync-key` para uso server-to-server.
 - Requests desde `chrome-extension://*` estan permitidos para uso de extension local (load unpacked).
 - Requests desde `https://web.whatsapp.com` estan permitidos para el panel embebido (content script).
 - Firestore rules por defecto en modo backend-only (`allow false` para SDK cliente directo).
