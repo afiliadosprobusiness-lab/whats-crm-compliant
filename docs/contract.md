@@ -220,6 +220,49 @@ Response `200`:
 }
 ```
 
+### `POST /api/v1/leads/upsert`
+
+Request:
+
+```json
+{
+  "name": "Cliente Demo",
+  "phoneE164": "+51999999999",
+  "consentStatus": "opted_in",
+  "consentSource": "whatsapp_web_manual",
+  "stage": "qualified",
+  "tags": ["comprador", "departamento"]
+}
+```
+
+Response `200`:
+
+```json
+{
+  "lead": {}
+}
+```
+
+### `PATCH /api/v1/leads/:leadId`
+
+Request (campos opcionales):
+
+```json
+{
+  "stage": "contacted",
+  "consentStatus": "opted_in",
+  "tags": ["comprador", "urgente"]
+}
+```
+
+Response `200`:
+
+```json
+{
+  "lead": {}
+}
+```
+
 ### `PATCH /api/v1/leads/:leadId/stage`
 
 Request:
@@ -399,3 +442,8 @@ Lista de eventos recientes (debug MVP).
 - Cambio: `POST /api/v1/campaigns/:campaignId/send` puede responder `429 RATE_LIMITED` por limite diario configurable
 - Tipo: non-breaking
 - Impacto: agrega guarda de cumplimiento para envios masivos diarios por workspace
+
+- Fecha: 2026-02-27
+- Cambio: se agregan `POST /api/v1/leads/upsert` y `PATCH /api/v1/leads/:leadId` para flujo CRM embebido en WhatsApp Web
+- Tipo: non-breaking
+- Impacto: permite crear/actualizar leads por telefono, enriqueciendo etapa/consentimiento/tags sin duplicar contactos

@@ -59,6 +59,22 @@ export class LeadsRepository {
     return updated;
   }
 
+  public async updateLead(workspaceId: string, leadId: string, patch: Partial<Lead>): Promise<Lead | null> {
+    const lead = await this.findById(workspaceId, leadId);
+    if (!lead) {
+      return null;
+    }
+
+    const updated: Lead = {
+      ...lead,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.db.collection(COLLECTION).doc(leadId).set(updated);
+    return updated;
+  }
+
   public async addNote(workspaceId: string, leadId: string, note: string): Promise<Lead | null> {
     const lead = await this.findById(workspaceId, leadId);
     if (!lead) {
@@ -80,4 +96,3 @@ export class LeadsRepository {
     return leads.filter((lead): lead is Lead => lead !== null);
   }
 }
-

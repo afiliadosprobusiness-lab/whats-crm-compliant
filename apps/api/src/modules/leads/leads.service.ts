@@ -2,7 +2,7 @@ import { AppError } from "../../core/errors.js";
 import { createId } from "../../core/id.js";
 import type { LeadsRepository } from "./leads.repository.js";
 import type { Lead } from "./leads.types.js";
-import { addLeadNoteSchema, createLeadSchema, updateLeadStageSchema } from "./leads.types.js";
+import { addLeadNoteSchema, createLeadSchema, updateLeadSchema, updateLeadStageSchema } from "./leads.types.js";
 
 export class LeadsService {
   constructor(private readonly leadsRepository: LeadsRepository) {}
@@ -40,6 +40,53 @@ export class LeadsService {
     return this.leadsRepository.list(workspaceId);
   }
 
+  public async upsertLeadByPhone(workspaceId: string, input: unknown): Promise<Lead> {
+    const payload = createLeadSchema.parse(input);
+    const existing = await this.leadsRepository.findByPhone(workspaceId, payload.phoneE164);
+    if (!existing) {
+      return this.createLead(workspaceId, payload);
+    }
+
+    const updated = await this.leadsRepository.updateLead(workspaceId, existing.id, {
+      name: payload.name,
+      stage: payload.stage,
+      consentStatus: payload.consentStatus,
+      consentSource: payload.consentSource,
+      tags: this.normalizeTags(payload.tags),
+    });
+
+    if (!updated) {
+      throw new AppError({
+        statusCode: 500,
+        code: "INTERNAL_ERROR",
+        message: "No se pudo actualizar lead existente",
+      });
+    }
+
+    return updated;
+  }
+
+  public async updateLead(workspaceId: string, leadId: string, input: unknown): Promise<Lead> {
+    const payload = updateLeadSchema.parse(input);
+    const updated = await this.leadsRepository.updateLead(workspaceId, leadId, {
+      ...(payload.name ? { name: payload.name } : {}),
+      ...(payload.stage ? { stage: payload.stage } : {}),
+      ...(payload.consentStatus ? { consentStatus: payload.consentStatus } : {}),
+      ...(payload.consentSource ? { consentSource: payload.consentSource } : {}),
+      ...(payload.tags ? { tags: this.normalizeTags(payload.tags) } : {}),
+    });
+
+    if (!updated) {
+      throw new AppError({
+        statusCode: 404,
+        code: "NOT_FOUND",
+        message: "Lead no encontrado",
+      });
+    }
+
+    return updated;
+  }
+
   public async updateLeadStage(workspaceId: string, leadId: string, input: unknown): Promise<Lead> {
     const payload = updateLeadStageSchema.parse(input);
     const updated = await this.leadsRepository.updateStage(workspaceId, leadId, payload.stage);
@@ -66,5 +113,10 @@ export class LeadsService {
     }
 
     return updated;
+  }
+
+  private normalizeTags(tags: string[]): string[] {
+    const unique = Array.from(new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean)));
+    return unique.slice(0, 8);
   }
 }

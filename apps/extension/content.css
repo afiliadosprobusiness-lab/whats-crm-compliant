@@ -128,6 +128,32 @@
   flex-wrap: wrap;
 }
 
+.wacrm-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.wacrm-chip {
+  border: 1px solid #cfe0cf;
+  border-radius: 999px;
+  background: #f4faf4;
+  color: #264629;
+  font-size: 11px;
+  line-height: 1;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.wacrm-chip:hover {
+  background: #eaf5ea;
+}
+
+.wacrm-chip:focus-visible {
+  outline: 2px solid #0a8f3f;
+  outline-offset: 1px;
+}
+
 .wacrm-btn {
   border: none;
   border-radius: 8px;

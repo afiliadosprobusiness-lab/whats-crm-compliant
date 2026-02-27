@@ -22,6 +22,8 @@ Proyecto: `whatsapp-crm-compliant`
    - Bloqueo del CRM cuando vence la suscripcion.
 3. Leads:
    - Alta con consentimiento.
+   - Upsert por telefono (`POST /api/v1/leads/upsert`) para evitar duplicados al operar desde WhatsApp Web.
+   - Actualizacion parcial (`PATCH /api/v1/leads/:leadId`) de etapa/consentimiento/tags/nombre.
    - Cambio de etapa (`new`, `contacted`, `qualified`, `won`, `lost`).
    - Notas por lead.
 4. Plantillas:
@@ -47,6 +49,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Login/registro owner.
   - Login con Google (OAuth extension + Firebase Auth).
   - Panel embebido en `web.whatsapp.com` via content script (lead rapido, notas, recordatorios, insertar plantilla).
+  - Panel embebido con flujo inmobiliario: etiquetas sugeridas, atajos de pipeline, ficha de perfil y seguimiento rapido por horas.
   - Estado de sesion.
   - Estado y renovacion de suscripcion.
   - KPIs basicos.

@@ -36,3 +36,15 @@ export const updateLeadStageSchema = z.object({
 export const addLeadNoteSchema = z.object({
   note: z.string().trim().min(1).max(500),
 });
+
+export const updateLeadSchema = z
+  .object({
+    name: z.string().trim().min(2).max(120).optional(),
+    consentStatus: z.enum(consentStatuses).optional(),
+    consentSource: z.string().trim().min(2).max(80).optional(),
+    tags: z.array(z.string().trim().min(1).max(30)).max(8).optional(),
+    stage: z.enum(leadStages).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Debe enviar al menos un campo para actualizar",
+  });

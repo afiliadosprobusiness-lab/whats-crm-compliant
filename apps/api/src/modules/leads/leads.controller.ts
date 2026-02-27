@@ -24,6 +24,12 @@ export class LeadsController {
     res.status(201).json({ lead });
   };
 
+  public upsertLeadByPhone = async (req: Request, res: Response): Promise<void> => {
+    const workspaceId = getWorkspaceId(res);
+    const lead = await this.leadsService.upsertLeadByPhone(workspaceId, req.body);
+    res.status(200).json({ lead });
+  };
+
   public listLeads = async (_req: Request, res: Response): Promise<void> => {
     const workspaceId = getWorkspaceId(res);
     const leads = await this.leadsService.listLeads(workspaceId);
@@ -42,6 +48,21 @@ export class LeadsController {
 
     const workspaceId = getWorkspaceId(res);
     const lead = await this.leadsService.updateLeadStage(workspaceId, leadId, req.body);
+    res.status(200).json({ lead });
+  };
+
+  public patchLead = async (req: Request, res: Response): Promise<void> => {
+    const leadId = req.params.leadId;
+    if (!leadId) {
+      throw new AppError({
+        statusCode: 400,
+        code: "VALIDATION_ERROR",
+        message: "leadId requerido",
+      });
+    }
+
+    const workspaceId = getWorkspaceId(res);
+    const lead = await this.leadsService.updateLead(workspaceId, leadId, req.body);
     res.status(200).json({ lead });
   };
 

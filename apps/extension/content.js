@@ -13,6 +13,71 @@
   ];
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
+  const PROFILE_NOTE_PREFIX = "FICHA_INMO|";
+  const SUGGESTED_TAGS = [
+    "comprador",
+    "propietario",
+    "inversionista",
+    "alquiler",
+    "venta",
+    "departamento",
+    "casa",
+    "terreno",
+    "credito",
+    "urgente",
+  ];
+  const STAGE_SHORTCUTS = [
+    { label: "Nuevo", stage: "new", note: "Lead registrado en CRM." },
+    { label: "Contactado", stage: "contacted", note: "Contacto inicial realizado." },
+    { label: "Visita", stage: "qualified", note: "Visita agendada para este lead." },
+    { label: "Oferta", stage: "qualified", note: "Lead solicita propuesta/oferta." },
+    { label: "Cierre", stage: "won", note: "Lead marcado como cierre exitoso." },
+    { label: "Perdido", stage: "lost", note: "Lead descartado por ahora." },
+  ];
+  const REAL_ESTATE_PROFILE = {
+    operation: [
+      { value: "", label: "Selecciona" },
+      { value: "compra", label: "Compra" },
+      { value: "alquiler", label: "Alquiler" },
+      { value: "venta_propietario", label: "Venta propietario" },
+    ],
+    propertyType: [
+      { value: "", label: "Selecciona" },
+      { value: "departamento", label: "Departamento" },
+      { value: "casa", label: "Casa" },
+      { value: "terreno", label: "Terreno" },
+      { value: "oficina", label: "Oficina" },
+      { value: "local", label: "Local comercial" },
+    ],
+    bedrooms: [
+      { value: "", label: "N/A" },
+      { value: "1", label: "1" },
+      { value: "2", label: "2" },
+      { value: "3", label: "3" },
+      { value: "4", label: "4+" },
+    ],
+    timeline: [
+      { value: "", label: "Sin definir" },
+      { value: "7_dias", label: "7 dias" },
+      { value: "30_dias", label: "30 dias" },
+      { value: "90_dias", label: "90 dias" },
+      { value: "6_meses", label: "6 meses" },
+    ],
+    source: [
+      { value: "", label: "Sin fuente" },
+      { value: "meta_ads", label: "Meta Ads" },
+      { value: "tiktok", label: "TikTok" },
+      { value: "referido", label: "Referido" },
+      { value: "portal", label: "Portal inmobiliario" },
+      { value: "organico", label: "Organico" },
+    ],
+    urgency: [
+      { value: "", label: "Normal" },
+      { value: "alta", label: "Alta" },
+      { value: "media", label: "Media" },
+      { value: "baja", label: "Baja" },
+    ],
+  };
 
   const hasChromeStorage = typeof chrome !== "undefined" && Boolean(chrome.storage?.local);
   const state = {
@@ -80,6 +145,63 @@
     return normalizePhone(match?.[0] || "");
   };
 
+  const populateSelect = (selectEl, options) => {
+    if (!selectEl) {
+      return;
+    }
+    selectEl.innerHTML = "";
+    options.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.value;
+      option.textContent = item.label;
+      selectEl.appendChild(option);
+    });
+  };
+
+  const slugTag = (value) => {
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 30);
+  };
+
+  const parseCsvTags = (raw) => {
+    return String(raw || "")
+      .split(",")
+      .map((item) => slugTag(item))
+      .filter(Boolean);
+  };
+
+  const mergeTags = (...tagLists) => {
+    const unique = new Set();
+    tagLists.flat().forEach((tag) => {
+      const clean = slugTag(tag);
+      if (clean) {
+        unique.add(clean);
+      }
+    });
+    return Array.from(unique).slice(0, 8);
+  };
+
+  const parseProfileNote = (lead) => {
+    const notes = Array.isArray(lead?.notes) ? lead.notes : [];
+    for (let i = notes.length - 1; i >= 0; i -= 1) {
+      const note = notes[i];
+      if (typeof note === "string" && note.startsWith(PROFILE_NOTE_PREFIX)) {
+        try {
+          const parsed = JSON.parse(note.slice(PROFILE_NOTE_PREFIX.length));
+          return parsed && typeof parsed === "object" ? parsed : null;
+        } catch (_error) {
+          return null;
+        }
+      }
+    }
+    return null;
+  };
+
   const getComposerEl = () => {
     return (
       document.querySelector("footer [contenteditable='true'][role='textbox']") ||
@@ -137,6 +259,76 @@
     };
   };
 
+  const getProfileFromForm = () => {
+    return {
+      op: state.nodes.operationSelect?.value || "",
+      tp: state.nodes.propertyTypeSelect?.value || "",
+      dst: String(state.nodes.districtInput?.value || "").trim().slice(0, 40),
+      bmin: String(state.nodes.budgetMinInput?.value || "").trim(),
+      bmax: String(state.nodes.budgetMaxInput?.value || "").trim(),
+      dorm: state.nodes.bedroomsSelect?.value || "",
+      tm: state.nodes.timelineSelect?.value || "",
+      src: state.nodes.sourceSelect?.value || "",
+      urg: state.nodes.urgencySelect?.value || "",
+    };
+  };
+
+  const hasProfileData = (profile) => {
+    return Object.values(profile).some((value) => Boolean(String(value || "").trim()));
+  };
+
+  const buildProfileDerivedTags = (profile) => {
+    const tags = [];
+    if (profile.op) tags.push(`op_${profile.op}`);
+    if (profile.tp) tags.push(`tipo_${profile.tp}`);
+    if (profile.dst) tags.push(`zona_${profile.dst}`);
+    if (profile.src) tags.push(`fuente_${profile.src}`);
+    if (profile.urg) tags.push(`urg_${profile.urg}`);
+    if (profile.tm) tags.push(`tiempo_${profile.tm}`);
+    if (profile.dorm) tags.push(`dorm_${profile.dorm}`);
+    if (profile.bmax) tags.push(`pres_${profile.bmax}`);
+    return tags.map((tag) => slugTag(tag)).filter(Boolean).slice(0, 6);
+  };
+
+  const buildProfileNote = (profile) => {
+    return `${PROFILE_NOTE_PREFIX}${JSON.stringify({
+      ...profile,
+      at: new Date().toISOString(),
+    })}`.slice(0, 500);
+  };
+
+  const fillProfileForm = (profile) => {
+    const safe = profile || {};
+    if (state.nodes.operationSelect) state.nodes.operationSelect.value = safe.op || "";
+    if (state.nodes.propertyTypeSelect) state.nodes.propertyTypeSelect.value = safe.tp || "";
+    if (state.nodes.districtInput) state.nodes.districtInput.value = safe.dst || "";
+    if (state.nodes.budgetMinInput) state.nodes.budgetMinInput.value = safe.bmin || "";
+    if (state.nodes.budgetMaxInput) state.nodes.budgetMaxInput.value = safe.bmax || "";
+    if (state.nodes.bedroomsSelect) state.nodes.bedroomsSelect.value = safe.dorm || "";
+    if (state.nodes.timelineSelect) state.nodes.timelineSelect.value = safe.tm || "";
+    if (state.nodes.sourceSelect) state.nodes.sourceSelect.value = safe.src || "";
+    if (state.nodes.urgencySelect) state.nodes.urgencySelect.value = safe.urg || "";
+  };
+
+  const updatePipelineMeta = () => {
+    if (!state.nodes.pipelineMetaEl) {
+      return;
+    }
+    const counters = LEAD_STAGES.map((stage) => {
+      const count = state.leads.filter((lead) => lead.stage === stage).length;
+      return `${stage}:${count}`;
+    });
+    state.nodes.pipelineMetaEl.textContent = `Pipeline: ${counters.join(" | ")}`;
+  };
+
+  const appendTagToInput = (tag) => {
+    const current = parseCsvTags(state.nodes.tagsInput?.value || "");
+    const merged = mergeTags(current, [tag]);
+    if (state.nodes.tagsInput) {
+      state.nodes.tagsInput.value = merged.join(", ");
+    }
+  };
+
   const setStatus = (text, isError = false) => {
     if (!state.nodes.statusEl) {
       return;
@@ -187,13 +379,22 @@
       state.nodes.noteBtn.disabled = true;
       state.nodes.stageBtn.disabled = true;
       state.nodes.reminderBtn.disabled = true;
+      if (state.nodes.quickFollowupBtn) {
+        state.nodes.quickFollowupBtn.disabled = true;
+      }
       return;
     }
 
-    state.nodes.leadMetaEl.textContent = `Lead: ${state.currentLead.name} | etapa: ${state.currentLead.stage} | consentimiento: ${state.currentLead.consentStatus}`;
+    const tagsText = Array.isArray(state.currentLead.tags) && state.currentLead.tags.length > 0
+      ? state.currentLead.tags.join(", ")
+      : "-";
+    state.nodes.leadMetaEl.textContent = `Lead: ${state.currentLead.name} | etapa: ${state.currentLead.stage} | tags: ${tagsText}`;
     state.nodes.noteBtn.disabled = false;
     state.nodes.stageBtn.disabled = false;
     state.nodes.reminderBtn.disabled = false;
+    if (state.nodes.quickFollowupBtn) {
+      state.nodes.quickFollowupBtn.disabled = false;
+    }
   };
 
   const syncLeadWithPhone = () => {
@@ -208,6 +409,15 @@
       state.leads.find((lead) => normalizePhone(lead.phoneE164) === phone) || null;
     if (state.currentLead && state.nodes.stageSelect) {
       state.nodes.stageSelect.value = state.currentLead.stage;
+      if (state.nodes.consentSelect) {
+        state.nodes.consentSelect.value = state.currentLead.consentStatus;
+      }
+      if (state.nodes.tagsInput) {
+        state.nodes.tagsInput.value = (state.currentLead.tags || []).join(", ");
+      }
+      fillProfileForm(parseProfileNote(state.currentLead));
+    } else {
+      fillProfileForm(null);
     }
     updateLeadMeta();
   };
@@ -232,6 +442,42 @@
       option.value = template.id;
       option.textContent = template.name;
       selectEl.appendChild(option);
+    });
+  };
+
+  const renderTagSuggestions = () => {
+    const container = state.nodes.tagSuggestionsEl;
+    if (!container) {
+      return;
+    }
+    container.innerHTML = "";
+    SUGGESTED_TAGS.forEach((tag) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "wacrm-chip";
+      button.textContent = tag;
+      button.addEventListener("click", () => appendTagToInput(tag));
+      container.appendChild(button);
+    });
+  };
+
+  const renderStageShortcuts = () => {
+    const container = state.nodes.stageShortcutsEl;
+    if (!container) {
+      return;
+    }
+    container.innerHTML = "";
+    STAGE_SHORTCUTS.forEach((shortcut) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "wacrm-btn ghost";
+      button.textContent = shortcut.label;
+      button.addEventListener("click", () => {
+        void withSyncGuard(async () => {
+          await applyStageShortcut(shortcut);
+        });
+      });
+      container.appendChild(button);
     });
   };
 
@@ -271,8 +517,11 @@
       state.templates = [];
       state.leads = [];
       state.currentLead = null;
+      renderTemplates();
+      fillProfileForm(null);
       setModeState();
       updateLeadMeta();
+      updatePipelineMeta();
       return;
     }
 
@@ -295,9 +544,10 @@
     state.templates = templatesData.templates || [];
     state.leads = leadsData.leads || [];
     renderTemplates();
+    updatePipelineMeta();
     syncLeadWithPhone();
     setModeState();
-    setStatus(`CRM activo para ${state.me?.email || "workspace actual"}.`);
+    setStatus(`CRM inmobiliario activo para ${state.me?.email || "workspace actual"}.`);
   };
 
   const insertTemplateIntoComposer = () => {
@@ -331,32 +581,49 @@
       return;
     }
 
-    const tagsRaw = String(state.nodes.tagsInput?.value || "");
+    const tagsRaw = parseCsvTags(String(state.nodes.tagsInput?.value || ""));
+    const profile = getProfileFromForm();
+    const derivedTags = buildProfileDerivedTags(profile);
+    const tags = mergeTags(tagsRaw, derivedTags);
     const payload = {
       name,
       phoneE164: phone,
       consentStatus: state.nodes.consentSelect?.value || "pending",
       consentSource: "whatsapp_web_manual",
       stage: state.nodes.stageSelect?.value || "new",
-      tags: tagsRaw
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
+      tags,
     };
 
-    await apiRequest("/leads", { method: "POST", body: JSON.stringify(payload) });
-    setStatus("Lead guardado.");
+    const result = await apiRequest("/leads/upsert", { method: "POST", body: JSON.stringify(payload) });
+    const leadId = result?.lead?.id;
+    if (leadId && hasProfileData(profile)) {
+      await apiRequest(`/leads/${leadId}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ note: buildProfileNote(profile) }),
+      });
+    }
+    setStatus("Lead/ficha guardados.");
     await fetchWorkspaceData();
   };
 
-  const updateLeadStage = async () => {
-    if (!state.currentLead) {
-      setStatus("No hay lead asociado para actualizar etapa.", true);
-      return;
+  const ensureCurrentLead = async () => {
+    if (state.currentLead) {
+      return state.currentLead;
     }
 
-    const stage = state.nodes.stageSelect?.value || state.currentLead.stage;
-    await apiRequest(`/leads/${state.currentLead.id}/stage`, {
+    await saveLead();
+    if (!state.currentLead) {
+      throw new Error("No hay lead asociado al chat actual.");
+    }
+
+    return state.currentLead;
+  };
+
+  const updateLeadStage = async () => {
+    const lead = await ensureCurrentLead();
+
+    const stage = state.nodes.stageSelect?.value || lead.stage;
+    await apiRequest(`/leads/${lead.id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ stage }),
     });
@@ -364,11 +631,24 @@
     await fetchWorkspaceData();
   };
 
-  const addLeadNote = async () => {
-    if (!state.currentLead) {
-      setStatus("No hay lead asociado para agregar nota.", true);
-      return;
+  const applyStageShortcut = async (shortcut) => {
+    const lead = await ensureCurrentLead();
+    await apiRequest(`/leads/${lead.id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ stage: shortcut.stage }),
+    });
+    if (shortcut.note) {
+      await apiRequest(`/leads/${lead.id}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ note: shortcut.note }),
+      });
     }
+    setStatus(`Atajo aplicado: ${shortcut.label}.`);
+    await fetchWorkspaceData();
+  };
+
+  const addLeadNote = async () => {
+    const lead = await ensureCurrentLead();
 
     const note = String(state.nodes.noteInput?.value || "").trim();
     if (!note) {
@@ -376,7 +656,7 @@
       return;
     }
 
-    await apiRequest(`/leads/${state.currentLead.id}/notes`, {
+    await apiRequest(`/leads/${lead.id}/notes`, {
       method: "POST",
       body: JSON.stringify({ note }),
     });
@@ -386,29 +666,47 @@
   };
 
   const addReminder = async () => {
-    if (!state.currentLead) {
-      setStatus("No hay lead asociado para crear recordatorio.", true);
-      return;
-    }
+    const lead = await ensureCurrentLead();
 
     const note = String(state.nodes.reminderNoteInput?.value || "").trim();
     const dueAtLocal = String(state.nodes.reminderDateInput?.value || "").trim();
-    const dueAtIso = new Date(dueAtLocal).toISOString();
-    if (!note || !dueAtLocal || Number.isNaN(new Date(dueAtLocal).getTime())) {
+    const dueDate = new Date(dueAtLocal);
+    if (!note || !dueAtLocal || Number.isNaN(dueDate.getTime())) {
       setStatus("Completa nota y fecha valida para el recordatorio.", true);
       return;
     }
+    const dueAtIso = dueDate.toISOString();
 
     await apiRequest("/reminders", {
       method: "POST",
       body: JSON.stringify({
-        leadId: state.currentLead.id,
+        leadId: lead.id,
         note,
         dueAt: dueAtIso,
       }),
     });
     state.nodes.reminderNoteInput.value = "";
     setStatus("Recordatorio creado.");
+  };
+
+  const createQuickFollowup = async () => {
+    const lead = await ensureCurrentLead();
+    const hoursRaw = Number.parseInt(String(state.nodes.followupHoursInput?.value || "24"), 10);
+    const hours = Number.isNaN(hoursRaw) ? 24 : Math.max(1, Math.min(720, hoursRaw));
+    const dueAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+    if (state.nodes.followupHoursInput) {
+      state.nodes.followupHoursInput.value = String(hours);
+    }
+
+    await apiRequest("/reminders", {
+      method: "POST",
+      body: JSON.stringify({
+        leadId: lead.id,
+        note: `Seguimiento inmobiliario (${hours}h)`,
+        dueAt,
+      }),
+    });
+    setStatus("Seguimiento rapido creado.");
   };
 
   const withSyncGuard = async (task) => {
@@ -442,6 +740,7 @@
             <div class="wacrm-block">
               <h4>Chat actual</h4>
               <p class="wacrm-meta" id="wacrm-chat-meta">Abre una conversacion para gestionar.</p>
+              <p class="wacrm-meta" id="wacrm-pipeline-meta">Pipeline: new:0 | contacted:0 | qualified:0 | won:0 | lost:0</p>
             </div>
             <div class="wacrm-block">
               <h4>Lead rapido</h4>
@@ -456,12 +755,54 @@
                 </label>
               </div>
               <label class="wacrm-label">Tags (coma)<input class="wacrm-input" id="wacrm-tags" placeholder="nuevo, premium" /></label>
+              <div class="wacrm-chip-row" id="wacrm-tag-suggestions"></div>
               <div class="wacrm-actions">
                 <button type="button" class="wacrm-btn" id="wacrm-save-lead">Guardar lead</button>
                 <button type="button" class="wacrm-btn ghost" id="wacrm-refresh">Refrescar</button>
                 <button type="button" class="wacrm-btn secondary" id="wacrm-update-stage">Actualizar etapa</button>
               </div>
+              <p class="wacrm-meta">Atajos de pipeline</p>
+              <div class="wacrm-actions" id="wacrm-stage-shortcuts"></div>
               <p class="wacrm-meta" id="wacrm-lead-meta">Sin lead asociado al chat actual.</p>
+            </div>
+            <div class="wacrm-block">
+              <h4>Ficha inmobiliaria</h4>
+              <div class="wacrm-grid two">
+                <label class="wacrm-label">Operacion
+                  <select class="wacrm-select" id="wacrm-operation"></select>
+                </label>
+                <label class="wacrm-label">Tipo propiedad
+                  <select class="wacrm-select" id="wacrm-property-type"></select>
+                </label>
+              </div>
+              <label class="wacrm-label">Distrito/Zona
+                <input class="wacrm-input" id="wacrm-district" placeholder="Miraflores, Surco, etc." />
+              </label>
+              <div class="wacrm-grid two">
+                <label class="wacrm-label">Presupuesto min
+                  <input class="wacrm-input" id="wacrm-budget-min" placeholder="300000" />
+                </label>
+                <label class="wacrm-label">Presupuesto max
+                  <input class="wacrm-input" id="wacrm-budget-max" placeholder="500000" />
+                </label>
+              </div>
+              <div class="wacrm-grid two">
+                <label class="wacrm-label">Dormitorios
+                  <select class="wacrm-select" id="wacrm-bedrooms"></select>
+                </label>
+                <label class="wacrm-label">Tiempo compra/cierre
+                  <select class="wacrm-select" id="wacrm-timeline"></select>
+                </label>
+              </div>
+              <div class="wacrm-grid two">
+                <label class="wacrm-label">Fuente
+                  <select class="wacrm-select" id="wacrm-source"></select>
+                </label>
+                <label class="wacrm-label">Urgencia
+                  <select class="wacrm-select" id="wacrm-urgency"></select>
+                </label>
+              </div>
+              <p class="wacrm-meta">Al guardar lead se guarda la ficha y se generan etiquetas automaticamente.</p>
             </div>
             <div class="wacrm-block">
               <h4>Plantilla en chat</h4>
@@ -484,6 +825,15 @@
                 <input class="wacrm-input" id="wacrm-reminder-note" placeholder="Llamar manana" />
               </label>
               <button type="button" class="wacrm-btn secondary" id="wacrm-save-reminder">Crear recordatorio</button>
+              <div class="wacrm-grid two">
+                <label class="wacrm-label">Seguimiento rapido (horas)
+                  <input class="wacrm-input" id="wacrm-followup-hours" type="number" min="1" max="720" value="24" />
+                </label>
+                <div class="wacrm-label">
+                  <span>Accion</span>
+                  <button type="button" class="wacrm-btn ghost" id="wacrm-quick-followup">Crear seguimiento rapido</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -497,33 +847,51 @@
     state.nodes.gateEl = root.querySelector("#wacrm-gate");
     state.nodes.toolsEl = root.querySelector("#wacrm-tools");
     state.nodes.chatEl = root.querySelector("#wacrm-chat-meta");
+    state.nodes.pipelineMetaEl = root.querySelector("#wacrm-pipeline-meta");
     state.nodes.nameInput = root.querySelector("#wacrm-name");
     state.nodes.phoneInput = root.querySelector("#wacrm-phone");
     state.nodes.stageSelect = root.querySelector("#wacrm-stage");
     state.nodes.consentSelect = root.querySelector("#wacrm-consent");
     state.nodes.tagsInput = root.querySelector("#wacrm-tags");
+    state.nodes.tagSuggestionsEl = root.querySelector("#wacrm-tag-suggestions");
+    state.nodes.stageShortcutsEl = root.querySelector("#wacrm-stage-shortcuts");
+    state.nodes.operationSelect = root.querySelector("#wacrm-operation");
+    state.nodes.propertyTypeSelect = root.querySelector("#wacrm-property-type");
+    state.nodes.districtInput = root.querySelector("#wacrm-district");
+    state.nodes.budgetMinInput = root.querySelector("#wacrm-budget-min");
+    state.nodes.budgetMaxInput = root.querySelector("#wacrm-budget-max");
+    state.nodes.bedroomsSelect = root.querySelector("#wacrm-bedrooms");
+    state.nodes.timelineSelect = root.querySelector("#wacrm-timeline");
+    state.nodes.sourceSelect = root.querySelector("#wacrm-source");
+    state.nodes.urgencySelect = root.querySelector("#wacrm-urgency");
     state.nodes.leadMetaEl = root.querySelector("#wacrm-lead-meta");
     state.nodes.templateSelect = root.querySelector("#wacrm-template");
     state.nodes.noteInput = root.querySelector("#wacrm-note");
     state.nodes.reminderDateInput = root.querySelector("#wacrm-reminder-date");
     state.nodes.reminderNoteInput = root.querySelector("#wacrm-reminder-note");
+    state.nodes.followupHoursInput = root.querySelector("#wacrm-followup-hours");
+    state.nodes.quickFollowupBtn = root.querySelector("#wacrm-quick-followup");
     state.nodes.noteBtn = root.querySelector("#wacrm-save-note");
     state.nodes.stageBtn = root.querySelector("#wacrm-update-stage");
     state.nodes.reminderBtn = root.querySelector("#wacrm-save-reminder");
 
-    LEAD_STAGES.forEach((stage) => {
-      const option = document.createElement("option");
-      option.value = stage;
-      option.textContent = stage;
-      state.nodes.stageSelect.appendChild(option);
-    });
-    CONSENT_STATES.forEach((consent) => {
-      const option = document.createElement("option");
-      option.value = consent;
-      option.textContent = consent;
-      state.nodes.consentSelect.appendChild(option);
-    });
+    populateSelect(
+      state.nodes.stageSelect,
+      LEAD_STAGES.map((stage) => ({ value: stage, label: stage }))
+    );
+    populateSelect(
+      state.nodes.consentSelect,
+      CONSENT_STATES.map((consent) => ({ value: consent, label: consent }))
+    );
+    populateSelect(state.nodes.operationSelect, REAL_ESTATE_PROFILE.operation);
+    populateSelect(state.nodes.propertyTypeSelect, REAL_ESTATE_PROFILE.propertyType);
+    populateSelect(state.nodes.bedroomsSelect, REAL_ESTATE_PROFILE.bedrooms);
+    populateSelect(state.nodes.timelineSelect, REAL_ESTATE_PROFILE.timeline);
+    populateSelect(state.nodes.sourceSelect, REAL_ESTATE_PROFILE.source);
+    populateSelect(state.nodes.urgencySelect, REAL_ESTATE_PROFILE.urgency);
     state.nodes.consentSelect.value = "opted_in";
+    renderTagSuggestions();
+    renderStageShortcuts();
 
     root.querySelector("#wacrm-toggle").addEventListener("click", () => {
       state.collapsed = !state.collapsed;
@@ -548,6 +916,9 @@
     });
     root.querySelector("#wacrm-save-reminder").addEventListener("click", () => {
       void withSyncGuard(addReminder);
+    });
+    root.querySelector("#wacrm-quick-followup").addEventListener("click", () => {
+      void withSyncGuard(createQuickFollowup);
     });
 
     state.nodes.phoneInput.addEventListener("input", () => {
