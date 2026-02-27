@@ -50,6 +50,10 @@ export const createApp = () => {
       return true;
     }
 
+    if (origin === "https://web.whatsapp.com") {
+      return true;
+    }
+
     return allowedWebOrigins.includes(origin);
   };
 

@@ -88,7 +88,23 @@
   };
 
   const getWhatsAppLoggedIn = () => {
-    return Boolean(document.querySelector("#side")) && Boolean(document.querySelector("#main"));
+    if (document.querySelector("[data-testid='qrcode']")) {
+      return false;
+    }
+
+    if (document.querySelector("#pane-side") || document.querySelector("#side")) {
+      return true;
+    }
+
+    if (document.querySelector("#main header")) {
+      return true;
+    }
+
+    if (document.querySelector("[data-testid='chat-list-search']")) {
+      return true;
+    }
+
+    return false;
   };
 
   const getCurrentChat = () => {

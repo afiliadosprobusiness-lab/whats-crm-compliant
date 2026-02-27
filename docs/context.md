@@ -95,6 +95,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - El panel en WhatsApp Web solo inserta texto en composer; el envio final queda manual por el usuario.
 - CORS restringido por `APP_ORIGIN`.
 - Requests desde `chrome-extension://*` estan permitidos para uso de extension local (load unpacked).
+- Requests desde `https://web.whatsapp.com` estan permitidos para el panel embebido (content script).
 - Firestore rules por defecto en modo backend-only (`allow false` para SDK cliente directo).
 
 ## Dependencias Criticas
