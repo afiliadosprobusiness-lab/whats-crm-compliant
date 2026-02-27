@@ -150,6 +150,23 @@ button:hover {
   background: var(--brand-dark);
 }
 
+.secondary-btn {
+  width: 100%;
+  margin-top: 8px;
+  background: #123056;
+}
+
+.secondary-btn:hover {
+  background: #0e2746;
+}
+
+.hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
 .session-row {
   margin-top: 8px;
   display: flex;

@@ -11,6 +11,7 @@ export const createAuthRouter = (
 
   router.post("/register", asyncHandler(async (req, res) => authController.register(req, res)));
   router.post("/login", asyncHandler(async (req, res) => authController.login(req, res)));
+  router.post("/google", asyncHandler(async (req, res) => authController.loginWithGoogle(req, res)));
 
   router.get("/me", authMiddleware, asyncHandler(async (req, res) => authController.me(req, res)));
   router.post("/logout", authMiddleware, asyncHandler(async (req, res) => authController.logout(req, res)));
@@ -23,4 +24,3 @@ export const createAuthRouter = (
 
   return router;
 };
-

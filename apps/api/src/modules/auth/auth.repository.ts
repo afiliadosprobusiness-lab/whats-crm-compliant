@@ -46,6 +46,22 @@ export class AuthRepository {
     return user;
   }
 
+  public async updateUser(userId: string, patch: Partial<User>): Promise<User | null> {
+    const current = await this.findUserById(userId);
+    if (!current) {
+      return null;
+    }
+
+    const updated: User = {
+      ...current,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.db.collection(COLLECTIONS.users).doc(userId).set(updated);
+    return updated;
+  }
+
   public async findUserById(userId: string): Promise<User | null> {
     const snap = await this.db.collection(COLLECTIONS.users).doc(userId).get();
     if (!snap.exists) {
@@ -112,4 +128,3 @@ export class AuthRepository {
       .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
   }
 }
-

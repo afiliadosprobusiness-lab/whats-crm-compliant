@@ -7,7 +7,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 ## Arquitectura
 
 - `apps/api`: API REST modular (Node.js/Express + TypeScript) con modulos:
-  - `auth` (registro/login/sesiones/usuarios por workspace)
+  - `auth` (registro/login/sesiones/usuarios por workspace, incluyendo Google via Firebase Auth)
   - `billing` (estado y renovacion de suscripcion)
   - `leads`
   - `templates`
@@ -23,6 +23,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - WhatsApp Cloud API (opcional por credenciales).
 - Fallback `dry_run` para demo/pruebas sin credenciales.
 - Firebase/Firestore (admin SDK) para persistencia duradera.
+- Firebase Authentication (Google provider) para login social opcional.
 - Vercel para despliegue del backend.
 
 ## Endpoints Principales
@@ -37,6 +38,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Auth:
   - `POST /api/v1/auth/register`
   - `POST /api/v1/auth/login`
+  - `POST /api/v1/auth/google`
   - `GET /api/v1/auth/me`
   - `POST /api/v1/auth/logout`
   - `GET /api/v1/auth/users`
@@ -81,6 +83,8 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Validacion de entrada con Zod en todos los endpoints.
 - Errores estructurados (sin stack traces al cliente).
 - Autenticacion por bearer token de sesion.
+- Login Google requiere `idToken` emitido por Firebase Auth con `sign_in_provider=google.com`.
+- Si Firebase Auth aun no esta inicializado, se debe ejecutar `Get started` en Firebase Console > Authentication.
 - Autorizacion por rol (`owner`, `agent`) para acciones administrativas.
 - Gate de suscripcion activa para operaciones CRM.
 - Envio masivo restringido a leads `opted_in`.

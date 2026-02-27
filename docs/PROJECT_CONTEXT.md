@@ -13,6 +13,7 @@ Proyecto: `whatsapp-crm-compliant`
 1. Auth multiusuario:
    - Registro owner por empresa.
    - Login/logout por token bearer.
+   - Login con Google (Firebase Auth) desde extension.
    - Gestion de usuarios del workspace (owner crea agentes).
 2. Suscripcion:
    - Estado por workspace.
@@ -40,7 +41,9 @@ Proyecto: `whatsapp-crm-compliant`
 
 - Popup unico con:
   - Config de `API Base URL` (local o Vercel).
+  - Config de `Google OAuth Client ID` + `Firebase Web API Key`.
   - Login/registro owner.
+  - Login con Google (OAuth extension + Firebase Auth).
   - Estado de sesion.
   - Estado y renovacion de suscripcion.
   - KPIs basicos.
@@ -53,5 +56,5 @@ Proyecto: `whatsapp-crm-compliant`
 ## Estado
 
 - Funcional para cobro mensual y operacion real.
+- Firebase Auth Google requiere activar `Get started` + provider `Google` en Firebase Console si aun no se hizo.
 - Pendiente para robustez enterprise: cola de envios, observabilidad avanzada, billing automatizado real, rotacion de claves y backups operativos.
-

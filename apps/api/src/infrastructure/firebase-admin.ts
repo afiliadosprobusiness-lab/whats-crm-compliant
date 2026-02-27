@@ -1,9 +1,11 @@
 import { cert, getApps, initializeApp, type App, applicationDefault } from "firebase-admin/app";
+import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { loadEnv } from "../config/env.js";
 
 let cachedApp: App | null = null;
 let cachedDb: Firestore | null = null;
+let cachedAuth: Auth | null = null;
 
 const buildCredential = () => {
   const env = loadEnv();
@@ -63,3 +65,11 @@ export const getFirebaseDb = (): Firestore => {
   return cachedDb;
 };
 
+export const getFirebaseAuth = (): Auth => {
+  if (cachedAuth) {
+    return cachedAuth;
+  }
+
+  cachedAuth = getAuth(getFirebaseApp());
+  return cachedAuth;
+};

@@ -2,10 +2,12 @@ import { addDays } from "../../core/time.js";
 import type { EnvConfig } from "../../config/env.js";
 import { AppError } from "../../core/errors.js";
 import { createId } from "../../core/id.js";
+import { getFirebaseAuth } from "../../infrastructure/firebase-admin.js";
 import type { AuthRepository } from "./auth.repository.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import {
   createWorkspaceUserSchema,
+  googleLoginSchema,
   loginSchema,
   registerSchema,
   type Session,
@@ -13,7 +15,7 @@ import {
   type Workspace,
 } from "./auth.types.js";
 
-type PublicUser = Omit<User, "passwordHash" | "passwordSalt">;
+type PublicUser = Omit<User, "passwordHash" | "passwordSalt" | "googleUid">;
 
 export type AuthContext = {
   user: PublicUser;
@@ -29,9 +31,10 @@ type AuthResponse = {
 
 const toPublicUser = (user: User): PublicUser => {
   // Remove credential material before sending data to client.
-  const { passwordHash, passwordSalt, ...publicUser } = user;
+  const { passwordHash, passwordSalt, googleUid, ...publicUser } = user;
   void passwordHash;
   void passwordSalt;
+  void googleUid;
   return publicUser;
 };
 
@@ -74,6 +77,8 @@ export class AuthService {
       name: payload.name,
       email: payload.email.toLowerCase(),
       role: "owner",
+      authProvider: "password",
+      googleUid: null,
       passwordSalt: password.salt,
       passwordHash: password.hash,
       createdAt: now,
@@ -83,6 +88,74 @@ export class AuthService {
     await this.authRepository.createUser(user);
     const session = await this.createSession(user.id, workspace.id);
 
+    return {
+      token: session.token,
+      user: toPublicUser(user),
+      workspace,
+    };
+  }
+
+  public async loginWithGoogle(input: unknown): Promise<AuthResponse> {
+    const payload = googleLoginSchema.parse(input);
+    const identity = await this.verifyGoogleIdentity(payload.idToken);
+
+    let user = await this.authRepository.findUserByEmail(identity.email);
+    let workspace: Workspace;
+
+    if (!user) {
+      const now = new Date().toISOString();
+      workspace = {
+        id: createId("ws"),
+        companyName: this.buildCompanyName(payload.companyName, identity.name, identity.email),
+        planMonthlyPricePen: this.env.planMonthlyPricePen,
+        subscriptionStatus: "active",
+        currentPeriodStart: now,
+        currentPeriodEnd: addDays(now, this.env.billingPeriodDays),
+        lastPaymentAt: now,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await this.authRepository.createWorkspace(workspace);
+
+      const generatedPassword = hashPassword(createId("google_pwd"));
+      user = {
+        id: createId("usr"),
+        workspaceId: workspace.id,
+        name: identity.name,
+        email: identity.email,
+        role: "owner",
+        authProvider: "google",
+        googleUid: identity.uid,
+        passwordSalt: generatedPassword.salt,
+        passwordHash: generatedPassword.hash,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await this.authRepository.createUser(user);
+    } else {
+      if (user.googleUid && user.googleUid !== identity.uid) {
+        throw new AppError({
+          statusCode: 401,
+          code: "UNAUTHORIZED",
+          message: "El token de Google no coincide con la cuenta registrada",
+        });
+      }
+
+      workspace = await this.getWorkspaceOrThrow(user.workspaceId);
+      if (!user.googleUid || user.authProvider !== "google") {
+        const updatedUser = await this.authRepository.updateUser(user.id, {
+          googleUid: identity.uid,
+          authProvider: user.authProvider ?? "google",
+        });
+        if (updatedUser) {
+          user = updatedUser;
+        }
+      }
+    }
+
+    const session = await this.createSession(user.id, workspace.id);
     return {
       token: session.token,
       user: toPublicUser(user),
@@ -110,14 +183,7 @@ export class AuthService {
       });
     }
 
-    const workspace = await this.authRepository.findWorkspaceById(user.workspaceId);
-    if (!workspace) {
-      throw new AppError({
-        statusCode: 500,
-        code: "INTERNAL_ERROR",
-        message: "Workspace de usuario no encontrado",
-      });
-    }
+    const workspace = await this.getWorkspaceOrThrow(user.workspaceId);
 
     const session = await this.createSession(user.id, workspace.id);
     return {
@@ -198,6 +264,8 @@ export class AuthService {
       name: payload.name,
       email: payload.email.toLowerCase(),
       role: payload.role,
+      authProvider: "password",
+      googleUid: null,
       passwordSalt: password.salt,
       passwordHash: password.hash,
       createdAt: now,
@@ -223,5 +291,73 @@ export class AuthService {
       createdAt: now,
       expiresAt: addDays(now, this.env.sessionTtlDays),
     });
+  }
+
+  private async getWorkspaceOrThrow(workspaceId: string): Promise<Workspace> {
+    const workspace = await this.authRepository.findWorkspaceById(workspaceId);
+    if (!workspace) {
+      throw new AppError({
+        statusCode: 500,
+        code: "INTERNAL_ERROR",
+        message: "Workspace de usuario no encontrado",
+      });
+    }
+
+    return workspace;
+  }
+
+  private buildCompanyName(inputCompanyName: string | undefined, name: string, email: string): string {
+    if (inputCompanyName) {
+      return inputCompanyName;
+    }
+
+    const cleanName = name.trim();
+    if (cleanName.length >= 2) {
+      return `${cleanName} Workspace`;
+    }
+
+    const emailLocal = email.split("@")[0]?.trim() ?? "Empresa";
+    return `${emailLocal} Workspace`;
+  }
+
+  private async verifyGoogleIdentity(idToken: string): Promise<{ uid: string; email: string; name: string }> {
+    try {
+      const decoded = await getFirebaseAuth().verifyIdToken(idToken, true);
+      const provider = decoded.firebase?.sign_in_provider;
+      if (provider !== "google.com") {
+        throw new AppError({
+          statusCode: 401,
+          code: "UNAUTHORIZED",
+          message: "Token no corresponde a Google",
+        });
+      }
+
+      const emailRaw = decoded.email?.trim().toLowerCase();
+      if (!emailRaw || decoded.email_verified !== true) {
+        throw new AppError({
+          statusCode: 401,
+          code: "UNAUTHORIZED",
+          message: "Cuenta Google sin correo verificado",
+        });
+      }
+
+      const fallbackName = emailRaw.split("@")[0] || "Owner";
+      const name = decoded.name?.trim() || fallbackName;
+      return {
+        uid: decoded.uid,
+        email: emailRaw,
+        name,
+      };
+    } catch (error: unknown) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      throw new AppError({
+        statusCode: 401,
+        code: "UNAUTHORIZED",
+        message: "Token Firebase invalido para login con Google",
+      });
+    }
   }
 }

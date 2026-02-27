@@ -15,6 +15,11 @@ export class AuthController {
     res.status(200).json(auth);
   };
 
+  public loginWithGoogle = async (req: Request, res: Response): Promise<void> => {
+    const auth = await this.authService.loginWithGoogle(req.body);
+    res.status(200).json(auth);
+  };
+
   public me = async (req: Request, res: Response): Promise<void> => {
     const token = extractBearerToken(req);
     const auth = await this.authService.getAuthContext(token);

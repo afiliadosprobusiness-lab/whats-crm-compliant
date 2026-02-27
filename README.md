@@ -7,11 +7,12 @@ CRM WhatsApp MVP para cobro mensual base de S/50, con backend deployable en Verc
 - API productiva: `https://whats-crm-compliant.vercel.app`
 - Firebase project: `whats-crm-compliant-2026`
 - Firestore DB: `(default)` en `nam5`
+- Firebase Web App: `1:301448363673:web:46c2ec5300453960b80208`
 - Extension MV3 lista para uso local (load unpacked) o distribucion por ZIP
 
 ## Features
 
-- Auth multiusuario por workspace (`owner`, `agent`)
+- Auth multiusuario por workspace (`owner`, `agent`) + login Google (Firebase Auth)
 - Suscripcion mensual por workspace
 - Leads, pipeline, notas, plantillas, campanas y recordatorios
 - Webhook WhatsApp (Cloud API opcional, `dry_run` fallback)
@@ -79,6 +80,16 @@ firebase --project whats-crm-compliant-2026 deploy --only firestore
 
 Esto habilito Firestore API, creo la DB default y desplego rules/indexes.
 
+## Firebase Auth Google (requerido para login Google)
+
+1. Firebase Console -> Authentication -> `Get started` (si aparece) y luego Sign-in method -> habilitar `Google`.
+2. En Google Cloud Console, crear OAuth Client ID para la extension.
+3. Agregar redirect URI de extension:
+   - `https://<EXTENSION_ID>.chromiumapp.org/oauth2`
+4. En el popup de la extension guardar:
+   - `Google OAuth Client ID`
+   - `Firebase Web API Key` (ya viene prellenado por defecto para este proyecto)
+
 ## Vercel CLI (ya aplicado en este proyecto)
 
 Comandos usados:
@@ -112,6 +123,10 @@ npm run vercel:deploy:prod
 5. En el popup, definir `API Base URL`:
    - Local: `http://localhost:4001/api/v1`
    - Produccion: `https://whats-crm-compliant.vercel.app/api/v1`
+6. (Opcional Google login) Completar:
+   - `Google OAuth Client ID`
+   - `Firebase Web API Key`
+7. Usar boton `Continuar con Google`.
 
 ## ZIP de extension
 
@@ -128,4 +143,3 @@ Salida:
 - No automatiza `web.whatsapp.com`
 - Envio masivo solo a `opted_in`
 - Errores estructurados sin filtrar secretos
-

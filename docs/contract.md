@@ -65,6 +65,19 @@ Request:
 
 Response `200`: mismo shape que register.
 
+### `POST /api/v1/auth/google`
+
+Request:
+
+```json
+{
+  "idToken": "firebase_id_token",
+  "companyName": "Mi Negocio (opcional para primer login)"
+}
+```
+
+Response `200`: mismo shape que register/login.
+
 ### `GET /api/v1/auth/me`
 
 Header: `Authorization: Bearer <token>`
@@ -373,3 +386,8 @@ Lista de eventos recientes (debug MVP).
 - Cambio: migracion de persistencia a Firestore + despliegue en Vercel sin cambios de shape HTTP
 - Tipo: non-breaking
 - Impacto: contrato API se mantiene; mejora durabilidad y operacion serverless
+
+- Fecha: 2026-02-27
+- Cambio: nuevo endpoint `POST /api/v1/auth/google` para login/registro con Firebase Auth Google
+- Tipo: non-breaking
+- Impacto: se agrega acceso por Google sin afectar login tradicional por email/password

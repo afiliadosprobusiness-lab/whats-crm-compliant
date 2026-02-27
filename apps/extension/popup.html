@@ -11,7 +11,7 @@
       <header class="hero">
         <p class="eyebrow">CRM ligero</p>
         <h1>WhatsApp Sales Desk</h1>
-        <p class="subtitle">Leads, plantillas, campañas y recordatorios en un solo panel.</p>
+        <p class="subtitle">Leads, plantillas, campanas y recordatorios en un solo panel.</p>
       </header>
 
       <section class="card">
@@ -21,7 +21,19 @@
             API Base URL
             <input id="api-base-url" name="apiBaseUrl" required />
           </label>
-          <button type="submit">Guardar URL API</button>
+          <label>
+            Google OAuth Client ID
+            <input
+              id="google-client-id"
+              name="googleClientId"
+              placeholder="xxxxxx-xxxx.apps.googleusercontent.com"
+            />
+          </label>
+          <label>
+            Firebase Web API Key
+            <input id="firebase-web-api-key" name="firebaseWebApiKey" placeholder="AIza..." />
+          </label>
+          <button type="submit">Guardar configuracion</button>
         </form>
         <form id="login-form" class="grid">
           <label>
@@ -32,8 +44,10 @@
             Password
             <input name="password" type="password" required minlength="6" />
           </label>
-          <button type="submit">Iniciar sesión</button>
+          <button type="submit">Iniciar sesion</button>
         </form>
+        <button id="google-login-btn" type="button" class="secondary-btn">Continuar con Google</button>
+        <small class="hint">Requiere Google habilitado en Firebase Authentication.</small>
         <details>
           <summary>Crear cuenta owner</summary>
           <form id="register-form" class="grid auth-subform">
@@ -57,13 +71,13 @@
           </form>
         </details>
         <div class="session-row">
-          <small id="session-label">Sin sesión</small>
-          <button id="logout-btn" type="button">Cerrar sesión</button>
+          <small id="session-label">Sin sesion</small>
+          <button id="logout-btn" type="button">Cerrar sesion</button>
         </div>
       </section>
 
       <section class="card" data-crm>
-        <h2>Suscripción</h2>
+        <h2>Suscripcion</h2>
         <p id="subscription-status">Sin datos.</p>
         <button id="renew-btn" type="button">Renovar 1 mes (S/50)</button>
       </section>
@@ -80,7 +94,7 @@
             <strong id="kpi-optin">0</strong>
           </article>
           <article>
-            <span>Campañas</span>
+            <span>Campanas</span>
             <strong id="kpi-campaigns">0</strong>
           </article>
         </div>
@@ -94,7 +108,7 @@
             <input name="name" required minlength="2" maxlength="120" />
           </label>
           <label>
-            Teléfono E.164
+            Telefono E.164
             <input name="phoneE164" required placeholder="+51999999999" />
           </label>
           <label>
@@ -144,10 +158,10 @@
       </section>
 
       <section class="card" data-crm>
-        <h2>Campaña Masiva</h2>
+        <h2>Campana masiva</h2>
         <form id="campaign-form" class="grid">
           <label>
-            Nombre campaña
+            Nombre campana
             <input name="name" required placeholder="Promo Marzo" />
           </label>
           <label>
