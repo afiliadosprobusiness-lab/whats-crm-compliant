@@ -31,6 +31,7 @@ import { TemplatesRepository } from "./modules/templates/templates.repository.js
 import { createTemplatesRouter } from "./modules/templates/templates.routes.js";
 import { TemplatesService } from "./modules/templates/templates.service.js";
 import { WebhooksController } from "./modules/whatsapp/webhooks.controller.js";
+import { WebhookEventsRepository } from "./modules/whatsapp/webhook-events.repository.js";
 import { createWebhooksRouter } from "./modules/whatsapp/webhooks.routes.js";
 import { WhatsAppService } from "./modules/whatsapp/whatsapp.service.js";
 
@@ -42,10 +43,11 @@ export const createApp = () => {
   const templatesRepository = new TemplatesRepository();
   const campaignsRepository = new CampaignsRepository();
   const remindersRepository = new RemindersRepository();
+  const webhookEventsRepository = new WebhookEventsRepository();
 
   const authService = new AuthService(authRepository, env);
   const authMiddleware = createAuthMiddleware(authService);
-  const whatsappService = new WhatsAppService(env);
+  const whatsappService = new WhatsAppService(env, webhookEventsRepository);
   const billingService = new BillingService(authRepository, env);
   const leadsService = new LeadsService(leadsRepository);
   const templatesService = new TemplatesService(templatesRepository);

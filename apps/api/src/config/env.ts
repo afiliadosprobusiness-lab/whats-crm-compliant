@@ -9,6 +9,10 @@ export type EnvConfig = {
   planMonthlyPricePen: number;
   billingPeriodDays: number;
   sessionTtlDays: number;
+  firebaseProjectId: string;
+  firebaseServiceAccountJson: string;
+  firebaseClientEmail: string;
+  firebasePrivateKey: string;
 };
 
 const parseIntWithFallback = (value: string | undefined, fallback: number): number => {
@@ -35,5 +39,9 @@ export const loadEnv = (): EnvConfig => {
     planMonthlyPricePen: Math.max(1, parseIntWithFallback(process.env.PLAN_MONTHLY_PRICE_PEN, 50)),
     billingPeriodDays: Math.max(1, parseIntWithFallback(process.env.BILLING_PERIOD_DAYS, 30)),
     sessionTtlDays: Math.max(1, parseIntWithFallback(process.env.SESSION_TTL_DAYS, 30)),
+    firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? "",
+    firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? "",
+    firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL ?? "",
+    firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY ?? "",
   };
 };

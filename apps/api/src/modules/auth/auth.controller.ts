@@ -5,19 +5,19 @@ import { extractBearerToken } from "./auth.middleware.js";
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  public register = (req: Request, res: Response): void => {
-    const auth = this.authService.registerOwner(req.body);
+  public register = async (req: Request, res: Response): Promise<void> => {
+    const auth = await this.authService.registerOwner(req.body);
     res.status(201).json(auth);
   };
 
-  public login = (req: Request, res: Response): void => {
-    const auth = this.authService.login(req.body);
+  public login = async (req: Request, res: Response): Promise<void> => {
+    const auth = await this.authService.login(req.body);
     res.status(200).json(auth);
   };
 
-  public me = (req: Request, res: Response): void => {
+  public me = async (req: Request, res: Response): Promise<void> => {
     const token = extractBearerToken(req);
-    const auth = this.authService.getAuthContext(token);
+    const auth = await this.authService.getAuthContext(token);
     res.status(200).json({
       user: auth.user,
       workspace: auth.workspace,
@@ -25,22 +25,21 @@ export class AuthController {
     });
   };
 
-  public logout = (req: Request, res: Response): void => {
+  public logout = async (req: Request, res: Response): Promise<void> => {
     const token = extractBearerToken(req);
-    this.authService.logout(token);
+    await this.authService.logout(token);
     res.status(200).json({ ok: true });
   };
 
-  public createWorkspaceUser = (req: Request, res: Response): void => {
+  public createWorkspaceUser = async (req: Request, res: Response): Promise<void> => {
     const token = extractBearerToken(req);
-    const user = this.authService.createWorkspaceUser(token, req.body);
+    const user = await this.authService.createWorkspaceUser(token, req.body);
     res.status(201).json({ user });
   };
 
-  public listWorkspaceUsers = (req: Request, res: Response): void => {
+  public listWorkspaceUsers = async (req: Request, res: Response): Promise<void> => {
     const token = extractBearerToken(req);
-    const users = this.authService.listWorkspaceUsers(token);
+    const users = await this.authService.listWorkspaceUsers(token);
     res.status(200).json({ users });
   };
 }
-

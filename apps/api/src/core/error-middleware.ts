@@ -37,6 +37,10 @@ export const errorHandler = (error: unknown, _req: Request, res: Response, _next
     return;
   }
 
+  // Keep operational visibility in server logs while returning generic errors to clients.
+  // eslint-disable-next-line no-console
+  console.error("[INTERNAL_ERROR]", error);
+
   res.status(500).json({
     error: {
       code: "INTERNAL_ERROR",
@@ -46,4 +50,3 @@ export const errorHandler = (error: unknown, _req: Request, res: Response, _next
     requestId: res.locals.requestId ?? null,
   });
 };
-

@@ -18,13 +18,13 @@ const getAuthContext = (res: Response): AuthContext => {
 export class BillingController {
   constructor(private readonly billingService: BillingService) {}
 
-  public getSubscription = (_req: Request, res: Response): void => {
+  public getSubscription = async (_req: Request, res: Response): Promise<void> => {
     const auth = getAuthContext(res);
-    const subscription = this.billingService.getSubscription(auth.workspace.id);
+    const subscription = await this.billingService.getSubscription(auth.workspace.id);
     res.status(200).json({ subscription });
   };
 
-  public renewSubscription = (req: Request, res: Response): void => {
+  public renewSubscription = async (req: Request, res: Response): Promise<void> => {
     const auth = getAuthContext(res);
     if (auth.user.role !== "owner") {
       throw new AppError({
@@ -34,8 +34,7 @@ export class BillingController {
       });
     }
 
-    const result = this.billingService.renewSubscription(auth.workspace.id, req.body);
+    const result = await this.billingService.renewSubscription(auth.workspace.id, req.body);
     res.status(200).json(result);
   };
 }
-

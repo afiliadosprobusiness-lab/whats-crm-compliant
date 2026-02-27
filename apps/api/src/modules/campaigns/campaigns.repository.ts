@@ -1,30 +1,35 @@
+import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
 import type { Campaign } from "./campaigns.types.js";
 
-export class CampaignsRepository {
-  private readonly campaigns = new Map<string, Campaign>();
+const COLLECTION = "campaigns";
 
-  public create(campaign: Campaign): Campaign {
-    this.campaigns.set(campaign.id, campaign);
+export class CampaignsRepository {
+  private readonly db = getFirebaseDb();
+
+  public async create(campaign: Campaign): Promise<Campaign> {
+    await this.db.collection(COLLECTION).doc(campaign.id).set(campaign);
     return campaign;
   }
 
-  public list(workspaceId: string): Campaign[] {
-    return Array.from(this.campaigns.values())
-      .filter((campaign) => campaign.workspaceId === workspaceId)
+  public async list(workspaceId: string): Promise<Campaign[]> {
+    const querySnap = await this.db.collection(COLLECTION).where("workspaceId", "==", workspaceId).get();
+    return querySnap.docs
+      .map((doc) => doc.data() as Campaign)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  public findById(workspaceId: string, campaignId: string): Campaign | null {
-    const campaign = this.campaigns.get(campaignId);
-    if (!campaign || campaign.workspaceId !== workspaceId) {
+  public async findById(workspaceId: string, campaignId: string): Promise<Campaign | null> {
+    const snap = await this.db.collection(COLLECTION).doc(campaignId).get();
+    if (!snap.exists) {
       return null;
     }
 
-    return campaign;
+    const campaign = snap.data() as Campaign;
+    return campaign.workspaceId === workspaceId ? campaign : null;
   }
 
-  public update(workspaceId: string, campaignId: string, patch: Partial<Campaign>): Campaign | null {
-    const current = this.findById(workspaceId, campaignId);
+  public async update(workspaceId: string, campaignId: string, patch: Partial<Campaign>): Promise<Campaign | null> {
+    const current = await this.findById(workspaceId, campaignId);
     if (!current) {
       return null;
     }
@@ -35,7 +40,8 @@ export class CampaignsRepository {
       updatedAt: new Date().toISOString(),
     };
 
-    this.campaigns.set(campaignId, updated);
+    await this.db.collection(COLLECTION).doc(campaignId).set(updated);
     return updated;
   }
 }
+

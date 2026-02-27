@@ -1,7 +1,8 @@
-const API_BASE_URL = "http://localhost:4001/api/v1";
+const DEFAULT_API_BASE_URL = "https://whats-crm-compliant.vercel.app/api/v1";
 const stages = ["new", "contacted", "qualified", "won", "lost"];
 
 const state = {
+  apiBaseUrl: localStorage.getItem("crm_api_base_url") || DEFAULT_API_BASE_URL,
   token: localStorage.getItem("crm_token") || "",
   authUser: null,
   workspace: null,
@@ -16,6 +17,7 @@ const crmSections = Array.from(document.querySelectorAll("[data-crm]"));
 const feedbackEl = document.getElementById("feedback");
 const sessionLabelEl = document.getElementById("session-label");
 const subscriptionLabelEl = document.getElementById("subscription-status");
+const apiBaseUrlInput = document.getElementById("api-base-url");
 
 const setFeedback = (text, isError = false) => {
   feedbackEl.textContent = text;
@@ -37,10 +39,16 @@ const persistToken = (token) => {
   }
 };
 
+const persistApiBaseUrl = (nextApiBaseUrl) => {
+  state.apiBaseUrl = nextApiBaseUrl;
+  localStorage.setItem("crm_api_base_url", nextApiBaseUrl);
+  apiBaseUrlInput.value = nextApiBaseUrl;
+};
+
 const apiRequest = async (path, options = {}) => {
   const extraHeaders = options.headers || {};
   const authHeaders = state.token ? { Authorization: `Bearer ${state.token}` } : {};
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${state.apiBaseUrl}${path}`, {
     headers: { "Content-Type": "application/json", ...authHeaders, ...extraHeaders },
     ...options,
   });
@@ -255,6 +263,21 @@ const resetState = () => {
   setCrmVisibility(false);
 };
 
+document.getElementById("api-config-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const nextApiBaseUrl = String(data.get("apiBaseUrl") || "").trim().replace(/\/+$/, "");
+  if (!nextApiBaseUrl) {
+    setFeedback("API Base URL requerida.", true);
+    return;
+  }
+
+  persistApiBaseUrl(nextApiBaseUrl);
+  resetState();
+  setFeedback("URL API guardada. Inicia sesion nuevamente.");
+});
+
 document.getElementById("login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -445,6 +468,7 @@ document.getElementById("reminder-form").addEventListener("submit", async (event
 });
 
 const bootstrap = async () => {
+  apiBaseUrlInput.value = state.apiBaseUrl;
   setCrmVisibility(false);
   renderSession();
   renderSubscription();
@@ -463,4 +487,3 @@ const bootstrap = async () => {
 };
 
 void bootstrap();
-

@@ -6,7 +6,7 @@ import { createTemplateSchema } from "./templates.types.js";
 export class TemplatesService {
   constructor(private readonly templatesRepository: TemplatesRepository) {}
 
-  public createTemplate(workspaceId: string, input: unknown): Template {
+  public async createTemplate(workspaceId: string, input: unknown): Promise<Template> {
     const payload = createTemplateSchema.parse(input);
     const now = new Date().toISOString();
 
@@ -20,7 +20,7 @@ export class TemplatesService {
     });
   }
 
-  public listTemplates(workspaceId: string): Template[] {
+  public async listTemplates(workspaceId: string): Promise<Template[]> {
     return this.templatesRepository.list(workspaceId);
   }
 }

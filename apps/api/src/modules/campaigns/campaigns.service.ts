@@ -19,9 +19,9 @@ export class CampaignsService {
     private readonly env: EnvConfig,
   ) {}
 
-  public createCampaign(workspaceId: string, input: unknown): Campaign {
+  public async createCampaign(workspaceId: string, input: unknown): Promise<Campaign> {
     const payload = createCampaignSchema.parse(input);
-    const template = this.templatesRepository.findById(workspaceId, payload.templateId);
+    const template = await this.templatesRepository.findById(workspaceId, payload.templateId);
     if (!template) {
       throw new AppError({
         statusCode: 404,
@@ -30,7 +30,7 @@ export class CampaignsService {
       });
     }
 
-    const leads = this.leadsRepository.findManyByIds(workspaceId, payload.recipientLeadIds);
+    const leads = await this.leadsRepository.findManyByIds(workspaceId, payload.recipientLeadIds);
     if (leads.length !== payload.recipientLeadIds.length) {
       throw new AppError({
         statusCode: 400,
@@ -55,7 +55,7 @@ export class CampaignsService {
     });
   }
 
-  public listCampaigns(workspaceId: string): Campaign[] {
+  public async listCampaigns(workspaceId: string): Promise<Campaign[]> {
     return this.campaignsRepository.list(workspaceId);
   }
 
@@ -63,7 +63,7 @@ export class CampaignsService {
     workspaceId: string,
     campaignId: string,
   ): Promise<{ campaign: Campaign; results: CampaignSendResult[] }> {
-    const campaign = this.campaignsRepository.findById(workspaceId, campaignId);
+    const campaign = await this.campaignsRepository.findById(workspaceId, campaignId);
     if (!campaign) {
       throw new AppError({
         statusCode: 404,
@@ -80,7 +80,7 @@ export class CampaignsService {
       });
     }
 
-    const template = this.templatesRepository.findById(workspaceId, campaign.templateId);
+    const template = await this.templatesRepository.findById(workspaceId, campaign.templateId);
     if (!template) {
       throw new AppError({
         statusCode: 404,
@@ -89,7 +89,7 @@ export class CampaignsService {
       });
     }
 
-    this.campaignsRepository.update(workspaceId, campaignId, {
+    await this.campaignsRepository.update(workspaceId, campaignId, {
       status: "sending",
       lastRunAt: new Date().toISOString(),
     });
@@ -115,7 +115,7 @@ export class CampaignsService {
         continue;
       }
 
-      const lead = this.leadsRepository.findById(workspaceId, leadId);
+      const lead = await this.leadsRepository.findById(workspaceId, leadId);
 
       if (!lead) {
         failedCount += 1;
@@ -162,7 +162,7 @@ export class CampaignsService {
     }
 
     const finalStatus = failedCount > 0 ? "sent_with_errors" : "sent";
-    const updated = this.campaignsRepository.update(workspaceId, campaignId, {
+    const updated = await this.campaignsRepository.update(workspaceId, campaignId, {
       status: finalStatus,
       sentCount,
       failedCount,

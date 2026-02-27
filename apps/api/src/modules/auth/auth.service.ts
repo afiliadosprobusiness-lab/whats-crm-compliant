@@ -41,9 +41,9 @@ export class AuthService {
     private readonly env: EnvConfig,
   ) {}
 
-  public registerOwner(input: unknown): AuthResponse {
+  public async registerOwner(input: unknown): Promise<AuthResponse> {
     const payload = registerSchema.parse(input);
-    const existingUser = this.authRepository.findUserByEmail(payload.email);
+    const existingUser = await this.authRepository.findUserByEmail(payload.email);
     if (existingUser) {
       throw new AppError({
         statusCode: 409,
@@ -65,7 +65,7 @@ export class AuthService {
       updatedAt: now,
     };
 
-    this.authRepository.createWorkspace(workspace);
+    await this.authRepository.createWorkspace(workspace);
 
     const password = hashPassword(payload.password);
     const user: User = {
@@ -80,8 +80,8 @@ export class AuthService {
       updatedAt: now,
     };
 
-    this.authRepository.createUser(user);
-    const session = this.createSession(user.id, workspace.id);
+    await this.authRepository.createUser(user);
+    const session = await this.createSession(user.id, workspace.id);
 
     return {
       token: session.token,
@@ -90,9 +90,9 @@ export class AuthService {
     };
   }
 
-  public login(input: unknown): AuthResponse {
+  public async login(input: unknown): Promise<AuthResponse> {
     const payload = loginSchema.parse(input);
-    const user = this.authRepository.findUserByEmail(payload.email);
+    const user = await this.authRepository.findUserByEmail(payload.email);
     if (!user) {
       throw new AppError({
         statusCode: 401,
@@ -110,7 +110,7 @@ export class AuthService {
       });
     }
 
-    const workspace = this.authRepository.findWorkspaceById(user.workspaceId);
+    const workspace = await this.authRepository.findWorkspaceById(user.workspaceId);
     if (!workspace) {
       throw new AppError({
         statusCode: 500,
@@ -119,7 +119,7 @@ export class AuthService {
       });
     }
 
-    const session = this.createSession(user.id, workspace.id);
+    const session = await this.createSession(user.id, workspace.id);
     return {
       token: session.token,
       user: toPublicUser(user),
@@ -127,8 +127,8 @@ export class AuthService {
     };
   }
 
-  public getAuthContext(token: string): AuthContext {
-    const session = this.authRepository.findSession(token);
+  public async getAuthContext(token: string): Promise<AuthContext> {
+    const session = await this.authRepository.findSession(token);
     if (!session) {
       throw new AppError({
         statusCode: 401,
@@ -140,7 +140,7 @@ export class AuthService {
     const nowTime = Date.now();
     const expiresAtTime = new Date(session.expiresAt).getTime();
     if (expiresAtTime <= nowTime) {
-      this.authRepository.deleteSession(token);
+      await this.authRepository.deleteSession(token);
       throw new AppError({
         statusCode: 401,
         code: "UNAUTHORIZED",
@@ -148,10 +148,10 @@ export class AuthService {
       });
     }
 
-    const user = this.authRepository.findUserById(session.userId);
-    const workspace = this.authRepository.findWorkspaceById(session.workspaceId);
+    const user = await this.authRepository.findUserById(session.userId);
+    const workspace = await this.authRepository.findWorkspaceById(session.workspaceId);
     if (!user || !workspace) {
-      this.authRepository.deleteSession(token);
+      await this.authRepository.deleteSession(token);
       throw new AppError({
         statusCode: 401,
         code: "UNAUTHORIZED",
@@ -166,12 +166,12 @@ export class AuthService {
     };
   }
 
-  public logout(token: string): void {
-    this.authRepository.deleteSession(token);
+  public async logout(token: string): Promise<void> {
+    await this.authRepository.deleteSession(token);
   }
 
-  public createWorkspaceUser(actorToken: string, input: unknown): PublicUser {
-    const actor = this.getAuthContext(actorToken);
+  public async createWorkspaceUser(actorToken: string, input: unknown): Promise<PublicUser> {
+    const actor = await this.getAuthContext(actorToken);
     if (actor.user.role !== "owner") {
       throw new AppError({
         statusCode: 403,
@@ -181,7 +181,7 @@ export class AuthService {
     }
 
     const payload = createWorkspaceUserSchema.parse(input);
-    const existing = this.authRepository.findUserByEmail(payload.email);
+    const existing = await this.authRepository.findUserByEmail(payload.email);
     if (existing) {
       throw new AppError({
         statusCode: 409,
@@ -204,16 +204,17 @@ export class AuthService {
       updatedAt: now,
     };
 
-    this.authRepository.createUser(user);
+    await this.authRepository.createUser(user);
     return toPublicUser(user);
   }
 
-  public listWorkspaceUsers(actorToken: string): PublicUser[] {
-    const actor = this.getAuthContext(actorToken);
-    return this.authRepository.listUsersByWorkspace(actor.workspace.id).map(toPublicUser);
+  public async listWorkspaceUsers(actorToken: string): Promise<PublicUser[]> {
+    const actor = await this.getAuthContext(actorToken);
+    const users = await this.authRepository.listUsersByWorkspace(actor.workspace.id);
+    return users.map(toPublicUser);
   }
 
-  private createSession(userId: string, workspaceId: string): Session {
+  private async createSession(userId: string, workspaceId: string): Promise<Session> {
     const now = new Date().toISOString();
     return this.authRepository.createSession({
       token: createId("sess"),
@@ -224,4 +225,3 @@ export class AuthService {
     });
   }
 }
-

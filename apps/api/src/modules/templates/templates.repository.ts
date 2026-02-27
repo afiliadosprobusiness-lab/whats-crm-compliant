@@ -1,25 +1,31 @@
+import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
 import type { Template } from "./templates.types.js";
 
-export class TemplatesRepository {
-  private readonly templates = new Map<string, Template>();
+const COLLECTION = "templates";
 
-  public create(template: Template): Template {
-    this.templates.set(template.id, template);
+export class TemplatesRepository {
+  private readonly db = getFirebaseDb();
+
+  public async create(template: Template): Promise<Template> {
+    await this.db.collection(COLLECTION).doc(template.id).set(template);
     return template;
   }
 
-  public list(workspaceId: string): Template[] {
-    return Array.from(this.templates.values())
-      .filter((template) => template.workspaceId === workspaceId)
+  public async list(workspaceId: string): Promise<Template[]> {
+    const querySnap = await this.db.collection(COLLECTION).where("workspaceId", "==", workspaceId).get();
+    return querySnap.docs
+      .map((doc) => doc.data() as Template)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  public findById(workspaceId: string, templateId: string): Template | null {
-    const template = this.templates.get(templateId);
-    if (!template || template.workspaceId !== workspaceId) {
+  public async findById(workspaceId: string, templateId: string): Promise<Template | null> {
+    const snap = await this.db.collection(COLLECTION).doc(templateId).get();
+    if (!snap.exists) {
       return null;
     }
 
-    return template;
+    const template = snap.data() as Template;
+    return template.workspaceId === workspaceId ? template : null;
   }
 }
+

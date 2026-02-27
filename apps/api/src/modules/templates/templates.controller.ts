@@ -18,15 +18,15 @@ const getWorkspaceId = (res: Response): string => {
 export class TemplatesController {
   constructor(private readonly templatesService: TemplatesService) {}
 
-  public createTemplate = (req: Request, res: Response): void => {
+  public createTemplate = async (req: Request, res: Response): Promise<void> => {
     const workspaceId = getWorkspaceId(res);
-    const template = this.templatesService.createTemplate(workspaceId, req.body);
+    const template = await this.templatesService.createTemplate(workspaceId, req.body);
     res.status(201).json({ template });
   };
 
-  public listTemplates = (_req: Request, res: Response): void => {
+  public listTemplates = async (_req: Request, res: Response): Promise<void> => {
     const workspaceId = getWorkspaceId(res);
-    const templates = this.templatesService.listTemplates(workspaceId);
+    const templates = await this.templatesService.listTemplates(workspaceId);
     res.status(200).json({ templates });
   };
 }

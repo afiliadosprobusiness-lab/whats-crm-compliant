@@ -1,84 +1,115 @@
+import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
 import type { PaymentRecord, Session, User, Workspace } from "./auth.types.js";
 
-export class AuthRepository {
-  private readonly users = new Map<string, User>();
-  private readonly usersByEmail = new Map<string, string>();
-  private readonly workspaces = new Map<string, Workspace>();
-  private readonly sessions = new Map<string, Session>();
-  private readonly payments = new Map<string, PaymentRecord[]>();
+const COLLECTIONS = {
+  users: "users",
+  workspaces: "workspaces",
+  sessions: "sessions",
+  payments: "payments",
+} as const;
 
-  public createWorkspace(workspace: Workspace): Workspace {
-    this.workspaces.set(workspace.id, workspace);
+export class AuthRepository {
+  private readonly db = getFirebaseDb();
+
+  public async createWorkspace(workspace: Workspace): Promise<Workspace> {
+    await this.db.collection(COLLECTIONS.workspaces).doc(workspace.id).set(workspace);
     return workspace;
   }
 
-  public findWorkspaceById(workspaceId: string): Workspace | null {
-    return this.workspaces.get(workspaceId) ?? null;
+  public async findWorkspaceById(workspaceId: string): Promise<Workspace | null> {
+    const snap = await this.db.collection(COLLECTIONS.workspaces).doc(workspaceId).get();
+    if (!snap.exists) {
+      return null;
+    }
+
+    return snap.data() as Workspace;
   }
 
-  public updateWorkspace(workspaceId: string, patch: Partial<Workspace>): Workspace | null {
-    const workspace = this.workspaces.get(workspaceId);
-    if (!workspace) {
+  public async updateWorkspace(workspaceId: string, patch: Partial<Workspace>): Promise<Workspace | null> {
+    const current = await this.findWorkspaceById(workspaceId);
+    if (!current) {
       return null;
     }
 
     const updated: Workspace = {
-      ...workspace,
+      ...current,
       ...patch,
       updatedAt: new Date().toISOString(),
     };
 
-    this.workspaces.set(workspaceId, updated);
+    await this.db.collection(COLLECTIONS.workspaces).doc(workspaceId).set(updated);
     return updated;
   }
 
-  public createUser(user: User): User {
-    this.users.set(user.id, user);
-    this.usersByEmail.set(user.email.toLowerCase(), user.id);
+  public async createUser(user: User): Promise<User> {
+    await this.db.collection(COLLECTIONS.users).doc(user.id).set(user);
     return user;
   }
 
-  public findUserById(userId: string): User | null {
-    return this.users.get(userId) ?? null;
-  }
-
-  public findUserByEmail(email: string): User | null {
-    const userId = this.usersByEmail.get(email.toLowerCase());
-    if (!userId) {
+  public async findUserById(userId: string): Promise<User | null> {
+    const snap = await this.db.collection(COLLECTIONS.users).doc(userId).get();
+    if (!snap.exists) {
       return null;
     }
 
-    return this.users.get(userId) ?? null;
+    return snap.data() as User;
   }
 
-  public listUsersByWorkspace(workspaceId: string): User[] {
-    return Array.from(this.users.values())
-      .filter((user) => user.workspaceId === workspaceId)
+  public async findUserByEmail(email: string): Promise<User | null> {
+    const lowerEmail = email.toLowerCase();
+    const querySnap = await this.db
+      .collection(COLLECTIONS.users)
+      .where("email", "==", lowerEmail)
+      .limit(1)
+      .get();
+
+    if (querySnap.empty) {
+      return null;
+    }
+
+    return querySnap.docs[0]!.data() as User;
+  }
+
+  public async listUsersByWorkspace(workspaceId: string): Promise<User[]> {
+    const querySnap = await this.db.collection(COLLECTIONS.users).where("workspaceId", "==", workspaceId).get();
+    return querySnap.docs
+      .map((doc) => doc.data() as User)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
-  public createSession(session: Session): Session {
-    this.sessions.set(session.token, session);
+  public async createSession(session: Session): Promise<Session> {
+    await this.db.collection(COLLECTIONS.sessions).doc(session.token).set(session);
     return session;
   }
 
-  public findSession(token: string): Session | null {
-    return this.sessions.get(token) ?? null;
+  public async findSession(token: string): Promise<Session | null> {
+    const snap = await this.db.collection(COLLECTIONS.sessions).doc(token).get();
+    if (!snap.exists) {
+      return null;
+    }
+
+    return snap.data() as Session;
   }
 
-  public deleteSession(token: string): void {
-    this.sessions.delete(token);
+  public async deleteSession(token: string): Promise<void> {
+    await this.db.collection(COLLECTIONS.sessions).doc(token).delete();
   }
 
-  public addPayment(payment: PaymentRecord): PaymentRecord {
-    const current = this.payments.get(payment.workspaceId) ?? [];
-    current.unshift(payment);
-    this.payments.set(payment.workspaceId, current);
+  public async addPayment(payment: PaymentRecord): Promise<PaymentRecord> {
+    await this.db.collection(COLLECTIONS.payments).doc(payment.id).set(payment);
     return payment;
   }
 
-  public listPaymentsByWorkspace(workspaceId: string): PaymentRecord[] {
-    return this.payments.get(workspaceId) ?? [];
+  public async listPaymentsByWorkspace(workspaceId: string): Promise<PaymentRecord[]> {
+    const querySnap = await this.db
+      .collection(COLLECTIONS.payments)
+      .where("workspaceId", "==", workspaceId)
+      .limit(100)
+      .get();
+
+    return querySnap.docs
+      .map((doc) => doc.data() as PaymentRecord)
+      .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
   }
 }
 

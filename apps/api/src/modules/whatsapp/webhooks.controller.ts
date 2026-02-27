@@ -26,13 +26,13 @@ export class WebhooksController {
     res.status(200).send(challenge);
   };
 
-  public receiveWebhook = (req: Request, res: Response): void => {
-    this.whatsappService.storeWebhookEvent(req.body);
+  public receiveWebhook = async (req: Request, res: Response): Promise<void> => {
+    await this.whatsappService.storeWebhookEvent(req.body);
     res.status(200).json({ received: true });
   };
 
-  public listWebhookEvents = (_req: Request, res: Response): void => {
-    res.status(200).json({ events: this.whatsappService.listWebhookEvents() });
+  public listWebhookEvents = async (_req: Request, res: Response): Promise<void> => {
+    const events = await this.whatsappService.listWebhookEvents();
+    res.status(200).json({ events });
   };
 }
-

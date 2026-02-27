@@ -18,15 +18,15 @@ const getWorkspaceId = (res: Response): string => {
 export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 
-  public createCampaign = (req: Request, res: Response): void => {
+  public createCampaign = async (req: Request, res: Response): Promise<void> => {
     const workspaceId = getWorkspaceId(res);
-    const campaign = this.campaignsService.createCampaign(workspaceId, req.body);
+    const campaign = await this.campaignsService.createCampaign(workspaceId, req.body);
     res.status(201).json({ campaign });
   };
 
-  public listCampaigns = (_req: Request, res: Response): void => {
+  public listCampaigns = async (_req: Request, res: Response): Promise<void> => {
     const workspaceId = getWorkspaceId(res);
-    const campaigns = this.campaignsService.listCampaigns(workspaceId);
+    const campaigns = await this.campaignsService.listCampaigns(workspaceId);
     res.status(200).json({ campaigns });
   };
 

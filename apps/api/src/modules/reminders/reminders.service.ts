@@ -11,9 +11,9 @@ export class RemindersService {
     private readonly leadsRepository: LeadsRepository,
   ) {}
 
-  public createReminder(workspaceId: string, input: unknown): Reminder {
+  public async createReminder(workspaceId: string, input: unknown): Promise<Reminder> {
     const payload = createReminderSchema.parse(input);
-    const lead = this.leadsRepository.findById(workspaceId, payload.leadId);
+    const lead = await this.leadsRepository.findById(workspaceId, payload.leadId);
     if (!lead) {
       throw new AppError({
         statusCode: 404,
@@ -35,7 +35,7 @@ export class RemindersService {
     });
   }
 
-  public listReminders(workspaceId: string): Reminder[] {
+  public async listReminders(workspaceId: string): Promise<Reminder[]> {
     return this.remindersRepository.list(workspaceId);
   }
 }

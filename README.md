@@ -1,32 +1,41 @@
 # whatsapp-crm-compliant
 
-MVP de CRM para WhatsApp orientado a cobro mensual base de S/50, inspirado en flujos comerciales tipo DragonChat pero sin automatizar WhatsApp Web.
+CRM WhatsApp MVP para cobro mensual base de S/50, con backend deployable en Vercel y persistencia en Firestore.
 
-## Que incluye
+## Estado actual
 
-- Auth multiusuario por workspace (`owner`, `agent`).
-- Suscripcion mensual por workspace (precio base configurable, default S/50).
-- Bloqueo del CRM cuando la suscripcion vence.
-- Leads con embudo comercial y notas.
-- Plantillas y campanas masivas con limite por minuto.
-- Recordatorios de seguimiento.
-- Webhook de WhatsApp (Cloud API opcional + `dry_run`).
-- Extension Chrome MV3 local para operar todo desde popup.
+- API productiva: `https://whats-crm-compliant.vercel.app`
+- Firebase project: `whats-crm-compliant-2026`
+- Firestore DB: `(default)` en `nam5`
+- Extension MV3 lista para uso local (load unpacked) o distribucion por ZIP
+
+## Features
+
+- Auth multiusuario por workspace (`owner`, `agent`)
+- Suscripcion mensual por workspace
+- Leads, pipeline, notas, plantillas, campanas y recordatorios
+- Webhook WhatsApp (Cloud API opcional, `dry_run` fallback)
+- Bloqueo CRM si suscripcion no activa
+- Persistencia en Firestore (ya no memoria)
 
 ## Estructura
 
-- `apps/api`: backend Node.js + TypeScript.
-- `apps/extension`: extension MV3.
-- `docs/context.md`: contexto tecnico fuente de verdad.
-- `docs/PROJECT_CONTEXT.md`: resumen operacional.
-- `docs/contract.md`: contrato de endpoints.
+- `apps/api`: backend Node.js + TypeScript
+- `apps/extension`: extension Chrome MV3
+- `docs/context.md`: arquitectura
+- `docs/PROJECT_CONTEXT.md`: resumen operacional
+- `docs/contract.md`: contrato API
+- `firebase.json`, `.firebaserc`, `firestore.rules`, `firestore.indexes.json`: config Firebase
+- `vercel.json`: despliegue serverless en Vercel
 
 ## Requisitos
 
 - Node.js 20+
 - npm 10+
+- Firebase CLI (`firebase --version`)
+- Vercel CLI (`vercel --version`)
 
-## Levantar API
+## Ejecutar local
 
 ```bash
 cd apps/api
@@ -35,18 +44,76 @@ copy .env.example .env
 cmd /c npm run dev
 ```
 
-API: `http://localhost:4001`.
+API local: `http://localhost:4001`
 
-## Cargar extension en Chrome
+## Variables de entorno API
 
-1. Ir a `chrome://extensions`.
-2. Activar `Developer mode`.
-3. Click en `Load unpacked`.
-4. Seleccionar `apps/extension`.
+Base:
 
-## Generar ZIP de la extension
+- `APP_ORIGIN`
+- `PLAN_MONTHLY_PRICE_PEN`
+- `BILLING_PERIOD_DAYS`
+- `SESSION_TTL_DAYS`
+- `MAX_CAMPAIGN_MESSAGES_PER_MINUTE`
+- `WHATSAPP_VERIFY_TOKEN`
+- `WHATSAPP_GRAPH_API_VERSION`
 
-Desde la raiz del proyecto:
+Firebase (una opcion):
+
+1. Recomendada en Vercel:
+   - `FIREBASE_SERVICE_ACCOUNT_JSON` (JSON completo de cuenta de servicio)
+   - `FIREBASE_PROJECT_ID`
+2. Alternativa:
+   - `FIREBASE_PROJECT_ID`
+   - `FIREBASE_CLIENT_EMAIL`
+   - `FIREBASE_PRIVATE_KEY`
+
+## Firebase CLI (ya aplicado en este proyecto)
+
+Comandos usados:
+
+```bash
+firebase projects:create whats-crm-compliant-2026 --display-name "Whats CRM Compliant"
+firebase --project whats-crm-compliant-2026 deploy --only firestore
+```
+
+Esto habilito Firestore API, creo la DB default y desplego rules/indexes.
+
+## Vercel CLI (ya aplicado en este proyecto)
+
+Comandos usados:
+
+```bash
+vercel project add whats-crm-compliant --non-interactive
+vercel link --yes --project whats-crm-compliant --scope afiliados-pro-s-projects
+vercel deploy --prod --yes --scope afiliados-pro-s-projects
+```
+
+URL final:
+
+- `https://whats-crm-compliant.vercel.app`
+
+## Scripts utiles
+
+```bash
+npm run api:build
+npm run api:check
+npm run extension:zip
+npm run firebase:firestore:deploy
+npm run vercel:deploy:prod
+```
+
+## Extension Chrome
+
+1. Ir a `chrome://extensions`
+2. Activar `Developer mode`
+3. `Load unpacked`
+4. Seleccionar `apps/extension`
+5. En el popup, definir `API Base URL`:
+   - Local: `http://localhost:4001/api/v1`
+   - Produccion: `https://whats-crm-compliant.vercel.app/api/v1`
+
+## ZIP de extension
 
 ```bash
 powershell -ExecutionPolicy Bypass -File .\apps\extension\package-extension.ps1
@@ -56,19 +123,9 @@ Salida:
 
 - `dist/whatsapp-crm-compliant-extension.zip`
 
-Ese ZIP te sirve para distribuir a clientes para instalacion manual en modo developer.
-
-## Flujo comercial rapido (S/50)
-
-1. Owner se registra en el popup.
-2. Crea agentes (`POST /api/v1/auth/users`) si necesita equipo.
-3. Revisa estado en suscripcion.
-4. Renueva por un mes con `POST /api/v1/billing/renew` (ejemplo `amountPen: 50`).
-5. Opera CRM (leads, templates, campanas, recordatorios).
-
 ## Cumplimiento
 
-- No scraping ni automatizacion de `web.whatsapp.com`.
-- Envio masivo solo a leads `opted_in`.
-- Errores estructurados y sin fuga de secretos.
+- No automatiza `web.whatsapp.com`
+- Envio masivo solo a `opted_in`
+- Errores estructurados sin filtrar secretos
 

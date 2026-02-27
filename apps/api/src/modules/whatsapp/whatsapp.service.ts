@@ -1,4 +1,6 @@
 import type { EnvConfig } from "../../config/env.js";
+import { createId } from "../../core/id.js";
+import type { WebhookEventsRepository } from "./webhook-events.repository.js";
 
 type Provider = "dry_run" | "whatsapp_cloud_api";
 
@@ -9,16 +11,11 @@ export type SendMessageResult = {
   error: string | null;
 };
 
-type WebhookEvent = {
-  id: string;
-  receivedAt: string;
-  payload: unknown;
-};
-
 export class WhatsAppService {
-  private readonly events: WebhookEvent[] = [];
-
-  constructor(private readonly env: EnvConfig) {}
+  constructor(
+    private readonly env: EnvConfig,
+    private readonly webhookEventsRepository: WebhookEventsRepository,
+  ) {}
 
   public async sendTextMessage(to: string, body: string): Promise<SendMessageResult> {
     if (!this.env.whatsappAccessToken || !this.env.whatsappPhoneNumberId) {
@@ -70,20 +67,15 @@ export class WhatsAppService {
     return mode === "subscribe" && verifyToken === this.env.whatsappVerifyToken;
   }
 
-  public storeWebhookEvent(payload: unknown): void {
-    this.events.unshift({
-      id: `evt_${Date.now()}`,
+  public async storeWebhookEvent(payload: unknown): Promise<void> {
+    await this.webhookEventsRepository.create({
+      id: createId("evt"),
       receivedAt: new Date().toISOString(),
       payload,
     });
-
-    if (this.events.length > 100) {
-      this.events.pop();
-    }
   }
 
-  public listWebhookEvents(): WebhookEvent[] {
-    return this.events;
+  public async listWebhookEvents() {
+    return this.webhookEventsRepository.listRecent(100);
   }
 }
-

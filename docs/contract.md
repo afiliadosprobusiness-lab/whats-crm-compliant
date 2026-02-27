@@ -369,3 +369,7 @@ Lista de eventos recientes (debug MVP).
 - Tipo: non-breaking
 - Impacto: habilita cobro mensual y control de acceso por workspace
 
+- Fecha: 2026-02-27
+- Cambio: migracion de persistencia a Firestore + despliegue en Vercel sin cambios de shape HTTP
+- Tipo: non-breaking
+- Impacto: contrato API se mantiene; mejora durabilidad y operacion serverless

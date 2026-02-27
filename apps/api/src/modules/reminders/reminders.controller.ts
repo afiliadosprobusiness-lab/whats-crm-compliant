@@ -18,15 +18,15 @@ const getWorkspaceId = (res: Response): string => {
 export class RemindersController {
   constructor(private readonly remindersService: RemindersService) {}
 
-  public createReminder = (req: Request, res: Response): void => {
+  public createReminder = async (req: Request, res: Response): Promise<void> => {
     const workspaceId = getWorkspaceId(res);
-    const reminder = this.remindersService.createReminder(workspaceId, req.body);
+    const reminder = await this.remindersService.createReminder(workspaceId, req.body);
     res.status(201).json({ reminder });
   };
 
-  public listReminders = (_req: Request, res: Response): void => {
+  public listReminders = async (_req: Request, res: Response): Promise<void> => {
     const workspaceId = getWorkspaceId(res);
-    const reminders = this.remindersService.listReminders(workspaceId);
+    const reminders = await this.remindersService.listReminders(workspaceId);
     res.status(200).json({ reminders });
   };
 }

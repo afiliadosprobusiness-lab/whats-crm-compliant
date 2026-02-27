@@ -11,8 +11,8 @@ export class BillingService {
     private readonly env: EnvConfig,
   ) {}
 
-  public getSubscription(workspaceId: string) {
-    const workspace = this.authRepository.findWorkspaceById(workspaceId);
+  public async getSubscription(workspaceId: string) {
+    const workspace = await this.authRepository.findWorkspaceById(workspaceId);
     if (!workspace) {
       throw new AppError({
         statusCode: 404,
@@ -21,7 +21,7 @@ export class BillingService {
       });
     }
 
-    const payments = this.authRepository.listPaymentsByWorkspace(workspaceId);
+    const payments = await this.authRepository.listPaymentsByWorkspace(workspaceId);
     const isInPeriod = new Date(workspace.currentPeriodEnd).getTime() > Date.now();
 
     return {
@@ -38,8 +38,8 @@ export class BillingService {
     };
   }
 
-  public renewSubscription(workspaceId: string, input: unknown) {
-    const workspace = this.authRepository.findWorkspaceById(workspaceId);
+  public async renewSubscription(workspaceId: string, input: unknown) {
+    const workspace = await this.authRepository.findWorkspaceById(workspaceId);
     if (!workspace) {
       throw new AppError({
         statusCode: 404,
@@ -63,7 +63,7 @@ export class BillingService {
     const baseIso = currentEndTime > Date.now() ? workspace.currentPeriodEnd : now;
     const extensionDays = this.env.billingPeriodDays * payload.months;
 
-    const updated = this.authRepository.updateWorkspace(workspaceId, {
+    const updated = await this.authRepository.updateWorkspace(workspaceId, {
       subscriptionStatus: "active",
       currentPeriodStart: now,
       currentPeriodEnd: addDays(baseIso, extensionDays),
@@ -78,7 +78,7 @@ export class BillingService {
       });
     }
 
-    const payment = this.authRepository.addPayment({
+    const payment = await this.authRepository.addPayment({
       id: createId("pay"),
       workspaceId,
       amountPen: payload.amountPen,
@@ -92,4 +92,3 @@ export class BillingService {
     };
   }
 }
-

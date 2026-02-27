@@ -7,9 +7,9 @@ import { addLeadNoteSchema, createLeadSchema, updateLeadStageSchema } from "./le
 export class LeadsService {
   constructor(private readonly leadsRepository: LeadsRepository) {}
 
-  public createLead(workspaceId: string, input: unknown): Lead {
+  public async createLead(workspaceId: string, input: unknown): Promise<Lead> {
     const payload = createLeadSchema.parse(input);
-    const existing = this.leadsRepository.findByPhone(workspaceId, payload.phoneE164);
+    const existing = await this.leadsRepository.findByPhone(workspaceId, payload.phoneE164);
     if (existing) {
       throw new AppError({
         statusCode: 409,
@@ -36,13 +36,13 @@ export class LeadsService {
     return this.leadsRepository.create(lead);
   }
 
-  public listLeads(workspaceId: string): Lead[] {
+  public async listLeads(workspaceId: string): Promise<Lead[]> {
     return this.leadsRepository.list(workspaceId);
   }
 
-  public updateLeadStage(workspaceId: string, leadId: string, input: unknown): Lead {
+  public async updateLeadStage(workspaceId: string, leadId: string, input: unknown): Promise<Lead> {
     const payload = updateLeadStageSchema.parse(input);
-    const updated = this.leadsRepository.updateStage(workspaceId, leadId, payload.stage);
+    const updated = await this.leadsRepository.updateStage(workspaceId, leadId, payload.stage);
     if (!updated) {
       throw new AppError({
         statusCode: 404,
@@ -54,9 +54,9 @@ export class LeadsService {
     return updated;
   }
 
-  public addLeadNote(workspaceId: string, leadId: string, input: unknown): Lead {
+  public async addLeadNote(workspaceId: string, leadId: string, input: unknown): Promise<Lead> {
     const payload = addLeadNoteSchema.parse(input);
-    const updated = this.leadsRepository.addNote(workspaceId, leadId, payload.note);
+    const updated = await this.leadsRepository.addNote(workspaceId, leadId, payload.note);
     if (!updated) {
       throw new AppError({
         statusCode: 404,

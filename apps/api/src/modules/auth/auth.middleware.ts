@@ -30,13 +30,15 @@ export const createAuthMiddleware = (authService: AuthService) => {
       return;
     }
 
-    try {
-      const context = authService.getAuthContext(token);
-      res.locals.auth = context;
-      next();
-    } catch (error) {
-      next(error);
-    }
+    void authService
+      .getAuthContext(token)
+      .then((context) => {
+        res.locals.auth = context;
+        next();
+      })
+      .catch((error) => {
+        next(error);
+      });
   };
 };
 
@@ -81,4 +83,3 @@ export const extractBearerToken = (req: Request): string => {
 
   return token;
 };
-

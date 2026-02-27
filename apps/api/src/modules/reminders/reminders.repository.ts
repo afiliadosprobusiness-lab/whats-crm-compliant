@@ -1,16 +1,21 @@
+import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
 import type { Reminder } from "./reminders.types.js";
 
-export class RemindersRepository {
-  private readonly reminders = new Map<string, Reminder>();
+const COLLECTION = "reminders";
 
-  public create(reminder: Reminder): Reminder {
-    this.reminders.set(reminder.id, reminder);
+export class RemindersRepository {
+  private readonly db = getFirebaseDb();
+
+  public async create(reminder: Reminder): Promise<Reminder> {
+    await this.db.collection(COLLECTION).doc(reminder.id).set(reminder);
     return reminder;
   }
 
-  public list(workspaceId: string): Reminder[] {
-    return Array.from(this.reminders.values())
-      .filter((reminder) => reminder.workspaceId === workspaceId)
+  public async list(workspaceId: string): Promise<Reminder[]> {
+    const querySnap = await this.db.collection(COLLECTION).where("workspaceId", "==", workspaceId).get();
+    return querySnap.docs
+      .map((doc) => doc.data() as Reminder)
       .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   }
 }
+

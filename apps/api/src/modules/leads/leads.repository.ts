@@ -1,38 +1,50 @@
+import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
 import type { Lead, LeadStage } from "./leads.types.js";
 
-export class LeadsRepository {
-  private readonly leads = new Map<string, Lead>();
+const COLLECTION = "leads";
 
-  public create(lead: Lead): Lead {
-    this.leads.set(lead.id, lead);
+export class LeadsRepository {
+  private readonly db = getFirebaseDb();
+
+  public async create(lead: Lead): Promise<Lead> {
+    await this.db.collection(COLLECTION).doc(lead.id).set(lead);
     return lead;
   }
 
-  public list(workspaceId: string): Lead[] {
-    return Array.from(this.leads.values())
-      .filter((lead) => lead.workspaceId === workspaceId)
+  public async list(workspaceId: string): Promise<Lead[]> {
+    const querySnap = await this.db.collection(COLLECTION).where("workspaceId", "==", workspaceId).get();
+    return querySnap.docs
+      .map((doc) => doc.data() as Lead)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  public findById(workspaceId: string, leadId: string): Lead | null {
-    const lead = this.leads.get(leadId);
-    if (!lead || lead.workspaceId !== workspaceId) {
+  public async findById(workspaceId: string, leadId: string): Promise<Lead | null> {
+    const snap = await this.db.collection(COLLECTION).doc(leadId).get();
+    if (!snap.exists) {
       return null;
     }
 
-    return lead;
+    const lead = snap.data() as Lead;
+    return lead.workspaceId === workspaceId ? lead : null;
   }
 
-  public findByPhone(workspaceId: string, phoneE164: string): Lead | null {
-    return (
-      Array.from(this.leads.values()).find(
-        (lead) => lead.workspaceId === workspaceId && lead.phoneE164 === phoneE164,
-      ) ?? null
-    );
+  public async findByPhone(workspaceId: string, phoneE164: string): Promise<Lead | null> {
+    const querySnap = await this.db
+      .collection(COLLECTION)
+      .where("workspaceId", "==", workspaceId)
+      .where("phoneE164", "==", phoneE164)
+      .limit(1)
+      .get();
+
+    if (querySnap.empty) {
+      return null;
+    }
+
+    return querySnap.docs[0]!.data() as Lead;
   }
 
-  public updateStage(workspaceId: string, leadId: string, stage: LeadStage): Lead | null {
-    const lead = this.findById(workspaceId, leadId);
+  public async updateStage(workspaceId: string, leadId: string, stage: LeadStage): Promise<Lead | null> {
+    const lead = await this.findById(workspaceId, leadId);
     if (!lead) {
       return null;
     }
@@ -43,12 +55,12 @@ export class LeadsRepository {
       updatedAt: new Date().toISOString(),
     };
 
-    this.leads.set(leadId, updated);
+    await this.db.collection(COLLECTION).doc(leadId).set(updated);
     return updated;
   }
 
-  public addNote(workspaceId: string, leadId: string, note: string): Lead | null {
-    const lead = this.findById(workspaceId, leadId);
+  public async addNote(workspaceId: string, leadId: string, note: string): Promise<Lead | null> {
+    const lead = await this.findById(workspaceId, leadId);
     if (!lead) {
       return null;
     }
@@ -59,13 +71,13 @@ export class LeadsRepository {
       updatedAt: new Date().toISOString(),
     };
 
-    this.leads.set(leadId, updated);
+    await this.db.collection(COLLECTION).doc(leadId).set(updated);
     return updated;
   }
 
-  public findManyByIds(workspaceId: string, leadIds: string[]): Lead[] {
-    return leadIds
-      .map((leadId) => this.findById(workspaceId, leadId))
-      .filter((lead): lead is Lead => lead !== null);
+  public async findManyByIds(workspaceId: string, leadIds: string[]): Promise<Lead[]> {
+    const leads = await Promise.all(leadIds.map((leadId) => this.findById(workspaceId, leadId)));
+    return leads.filter((lead): lead is Lead => lead !== null);
   }
 }
+

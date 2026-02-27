@@ -18,19 +18,19 @@ const getWorkspaceId = (res: Response): string => {
 export class LeadsController {
   constructor(private readonly leadsService: LeadsService) {}
 
-  public createLead = (req: Request, res: Response): void => {
+  public createLead = async (req: Request, res: Response): Promise<void> => {
     const workspaceId = getWorkspaceId(res);
-    const lead = this.leadsService.createLead(workspaceId, req.body);
+    const lead = await this.leadsService.createLead(workspaceId, req.body);
     res.status(201).json({ lead });
   };
 
-  public listLeads = (_req: Request, res: Response): void => {
+  public listLeads = async (_req: Request, res: Response): Promise<void> => {
     const workspaceId = getWorkspaceId(res);
-    const leads = this.leadsService.listLeads(workspaceId);
+    const leads = await this.leadsService.listLeads(workspaceId);
     res.status(200).json({ leads });
   };
 
-  public updateLeadStage = (req: Request, res: Response): void => {
+  public updateLeadStage = async (req: Request, res: Response): Promise<void> => {
     const leadId = req.params.leadId;
     if (!leadId) {
       throw new AppError({
@@ -41,11 +41,11 @@ export class LeadsController {
     }
 
     const workspaceId = getWorkspaceId(res);
-    const lead = this.leadsService.updateLeadStage(workspaceId, leadId, req.body);
+    const lead = await this.leadsService.updateLeadStage(workspaceId, leadId, req.body);
     res.status(200).json({ lead });
   };
 
-  public addLeadNote = (req: Request, res: Response): void => {
+  public addLeadNote = async (req: Request, res: Response): Promise<void> => {
     const leadId = req.params.leadId;
     if (!leadId) {
       throw new AppError({
@@ -56,7 +56,7 @@ export class LeadsController {
     }
 
     const workspaceId = getWorkspaceId(res);
-    const lead = this.leadsService.addLeadNote(workspaceId, leadId, req.body);
+    const lead = await this.leadsService.addLeadNote(workspaceId, leadId, req.body);
     res.status(200).json({ lead });
   };
 }

@@ -8,6 +8,8 @@
     "api:build": "npm --prefix apps/api run build",
     "api:start": "npm --prefix apps/api run start",
     "api:check": "npm --prefix apps/api run check",
-    "extension:zip": "powershell -ExecutionPolicy Bypass -File ./apps/extension/package-extension.ps1"
+    "extension:zip": "powershell -ExecutionPolicy Bypass -File ./apps/extension/package-extension.ps1",
+    "firebase:firestore:deploy": "firebase --project whats-crm-compliant-2026 deploy --only firestore",
+    "vercel:deploy:prod": "vercel deploy --prod --yes --scope afiliados-pro-s-projects"
   }
 }
