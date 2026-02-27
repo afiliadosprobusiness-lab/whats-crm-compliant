@@ -13,6 +13,7 @@
   ];
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
+  const CRM_BUILD_TAG = "0.3.0-2026-02-27";
   const PROFILE_NOTE_PREFIX = "FICHA_INMO|";
   const SUGGESTED_TAGS = [
     "comprador",
@@ -730,7 +731,7 @@
     root.innerHTML = `
       <div class="wacrm-card">
         <div class="wacrm-header">
-          <span class="wacrm-title">CRM WhatsApp</span>
+          <span class="wacrm-title">CRM WhatsApp ${CRM_BUILD_TAG}</span>
           <button type="button" class="wacrm-minify" id="wacrm-toggle">Minimizar</button>
         </div>
         <div class="wacrm-body" id="wacrm-body">
