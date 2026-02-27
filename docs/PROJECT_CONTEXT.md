@@ -50,6 +50,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Login con Google (OAuth extension + Firebase Auth).
   - Panel embebido en `web.whatsapp.com` via content script (lead rapido, notas, recordatorios, insertar plantilla).
   - Panel embebido con flujo inmobiliario: etiquetas sugeridas, atajos de pipeline, ficha de perfil y seguimiento rapido por horas.
+  - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
   - Estado de sesion.
   - Estado y renovacion de suscripcion.
   - KPIs basicos.

@@ -10,10 +10,44 @@
     "crm_token",
     "crm_google_client_id",
     "crm_firebase_web_api_key",
+    "crm_tutorial_progress_v1",
   ];
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
-  const CRM_BUILD_TAG = "0.3.0-2026-02-27";
+  const CRM_BUILD_TAG = "0.4.0-2026-02-27";
+  const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
+  const TUTORIAL_STEPS = [
+    {
+      id: "open_chat",
+      label: "Abrir un chat activo",
+      hint: "Selecciona un chat en WhatsApp para prellenar nombre/telefono.",
+    },
+    {
+      id: "save_lead",
+      label: "Guardar lead",
+      hint: "Completa datos base y pulsa Guardar lead.",
+    },
+    {
+      id: "set_stage",
+      label: "Actualizar etapa",
+      hint: "Usa atajos o selector de etapa para mover el lead en pipeline.",
+    },
+    {
+      id: "add_profile",
+      label: "Completar ficha inmobiliaria",
+      hint: "Define operacion, tipo, zona, presupuesto y urgencia.",
+    },
+    {
+      id: "insert_template",
+      label: "Insertar plantilla",
+      hint: "Inserta texto en el chat y envia manualmente.",
+    },
+    {
+      id: "create_followup",
+      label: "Crear seguimiento",
+      hint: "Programa recordatorio manual o rapido en horas.",
+    },
+  ];
   const PROFILE_NOTE_PREFIX = "FICHA_INMO|";
   const SUGGESTED_TAGS = [
     "comprador",
@@ -91,9 +125,11 @@
     leads: [],
     currentLead: null,
     currentChat: null,
+    activeSection: "overview",
     collapsed: false,
     syncing: false,
     syncTimer: null,
+    tutorialProgress: {},
     nodes: {},
   };
 
@@ -144,6 +180,16 @@
   const extractPhoneFromText = (text) => {
     const match = String(text || "").match(/\+?\d[\d\s-]{7,}/);
     return normalizePhone(match?.[0] || "");
+  };
+
+  const storageSet = async (payload) => {
+    if (!hasChromeStorage) {
+      return;
+    }
+
+    await new Promise((resolve) => {
+      chrome.storage.local.set(payload, resolve);
+    });
   };
 
   const populateSelect = (selectEl, options) => {
@@ -201,6 +247,68 @@
       }
     }
     return null;
+  };
+
+  const getDefaultTutorialProgress = () => {
+    return TUTORIAL_STEPS.reduce((acc, step) => {
+      acc[step.id] = false;
+      return acc;
+    }, {});
+  };
+
+  const normalizeTutorialProgress = (value) => {
+    const base = getDefaultTutorialProgress();
+    if (!value || typeof value !== "object") {
+      return base;
+    }
+
+    TUTORIAL_STEPS.forEach((step) => {
+      base[step.id] = Boolean(value[step.id]);
+    });
+    return base;
+  };
+
+  const getTutorialCompletion = () => {
+    const done = TUTORIAL_STEPS.filter((step) => state.tutorialProgress[step.id]).length;
+    return `${done}/${TUTORIAL_STEPS.length}`;
+  };
+
+  const isToday = (iso) => {
+    const date = new Date(iso || "");
+    if (Number.isNaN(date.getTime())) {
+      return false;
+    }
+
+    const now = new Date();
+    return (
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate()
+    );
+  };
+
+  const getLeadHeatScore = (lead) => {
+    if (!lead || lead.stage === "won" || lead.stage === "lost") {
+      return -1;
+    }
+
+    let score = 0;
+    if (lead.stage === "qualified") score += 4;
+    if (lead.stage === "contacted") score += 2;
+    if (lead.stage === "new") score += 1;
+
+    const tags = Array.isArray(lead.tags) ? lead.tags : [];
+    if (tags.some((tag) => /urgente|urg_alta/i.test(String(tag)))) {
+      score += 3;
+    }
+    if (tags.some((tag) => /comprador|inversionista/i.test(String(tag)))) {
+      score += 2;
+    }
+
+    if (isToday(lead.updatedAt || lead.createdAt)) {
+      score += 2;
+    }
+    return score;
   };
 
   const getComposerEl = () => {
@@ -330,12 +438,161 @@
     }
   };
 
+  const markTutorialStep = async (stepId) => {
+    if (!stepId || !Object.prototype.hasOwnProperty.call(state.tutorialProgress, stepId)) {
+      return;
+    }
+    if (state.tutorialProgress[stepId]) {
+      return;
+    }
+
+    state.tutorialProgress[stepId] = true;
+    if (state.nodes.tutorialSummaryEl) {
+      state.nodes.tutorialSummaryEl.textContent = `Progreso tutorial: ${getTutorialCompletion()}`;
+    }
+    await storageSet({ [TUTORIAL_PROGRESS_KEY]: state.tutorialProgress });
+    renderTutorial();
+  };
+
+  const resetTutorial = async () => {
+    state.tutorialProgress = getDefaultTutorialProgress();
+    if (state.nodes.tutorialSummaryEl) {
+      state.nodes.tutorialSummaryEl.textContent = `Progreso tutorial: ${getTutorialCompletion()}`;
+    }
+    await storageSet({ [TUTORIAL_PROGRESS_KEY]: state.tutorialProgress });
+    renderTutorial();
+  };
+
+  const fillLeadIntoForm = (lead) => {
+    if (!lead) {
+      return;
+    }
+
+    state.currentLead = lead;
+    if (state.nodes.nameInput) state.nodes.nameInput.value = lead.name || "";
+    if (state.nodes.phoneInput) state.nodes.phoneInput.value = lead.phoneE164 || "";
+    if (state.nodes.stageSelect) state.nodes.stageSelect.value = lead.stage || "new";
+    if (state.nodes.consentSelect) state.nodes.consentSelect.value = lead.consentStatus || "pending";
+    if (state.nodes.tagsInput) state.nodes.tagsInput.value = (lead.tags || []).join(", ");
+    fillProfileForm(parseProfileNote(lead));
+    updateLeadMeta();
+    setStatus(`Lead cargado: ${lead.name}.`);
+  };
+
+  const renderHotLeads = () => {
+    const listEl = state.nodes.hotLeadsEl;
+    const metaEl = state.nodes.hotLeadsMetaEl;
+    if (!listEl || !metaEl) {
+      return;
+    }
+
+    listEl.innerHTML = "";
+    const hotLeads = state.leads
+      .filter((lead) => isToday(lead.updatedAt || lead.createdAt))
+      .map((lead) => ({ lead, score: getLeadHeatScore(lead) }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+
+    if (hotLeads.length === 0) {
+      metaEl.textContent = "Sin leads calientes hoy.";
+      return;
+    }
+
+    metaEl.textContent = `${hotLeads.length} lead(s) priorizados hoy.`;
+    hotLeads.forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "wacrm-hot-item";
+      button.innerHTML = `
+        <span class="wacrm-hot-name">${item.lead.name}</span>
+        <span class="wacrm-hot-meta">${item.lead.stage} | ${item.lead.phoneE164 || "-"}</span>
+      `;
+      button.addEventListener("click", () => fillLeadIntoForm(item.lead));
+      listEl.appendChild(button);
+    });
+  };
+
+  const renderTutorial = () => {
+    const listEl = state.nodes.tutorialListEl;
+    if (!listEl) {
+      return;
+    }
+
+    listEl.innerHTML = "";
+    if (state.nodes.tutorialSummaryEl) {
+      state.nodes.tutorialSummaryEl.textContent = `Progreso tutorial: ${getTutorialCompletion()}`;
+    }
+
+    TUTORIAL_STEPS.forEach((step) => {
+      const row = document.createElement("label");
+      row.className = "wacrm-check-row";
+      row.setAttribute("for", `wacrm-step-${step.id}`);
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.id = `wacrm-step-${step.id}`;
+      checkbox.checked = Boolean(state.tutorialProgress[step.id]);
+      checkbox.addEventListener("change", () => {
+        state.tutorialProgress[step.id] = checkbox.checked;
+        if (state.nodes.tutorialSummaryEl) {
+          state.nodes.tutorialSummaryEl.textContent = `Progreso tutorial: ${getTutorialCompletion()}`;
+        }
+        void storageSet({ [TUTORIAL_PROGRESS_KEY]: state.tutorialProgress });
+      });
+
+      const content = document.createElement("span");
+      content.className = "wacrm-check-content";
+      content.innerHTML = `
+        <strong>${step.label}</strong>
+        <small>${step.hint}</small>
+      `;
+
+      row.appendChild(checkbox);
+      row.appendChild(content);
+      listEl.appendChild(row);
+    });
+  };
+
   const setStatus = (text, isError = false) => {
     if (!state.nodes.statusEl) {
       return;
     }
     state.nodes.statusEl.textContent = text;
     state.nodes.statusEl.classList.toggle("error", isError);
+  };
+
+  const setActiveSection = (section) => {
+    const allowed = new Set(["overview", "lead", "actions", "tutorial", "all"]);
+    const nextSection = allowed.has(section) ? section : "overview";
+    state.activeSection = nextSection;
+
+    const blocks = state.nodes.toolsEl?.querySelectorAll?.("[data-section]") || [];
+    blocks.forEach((block) => {
+      const raw = String(block.getAttribute("data-section") || "");
+      const sections = raw.split(",").map((item) => item.trim()).filter(Boolean);
+      const visible = nextSection === "all" || sections.includes(nextSection);
+      block.classList.toggle("wacrm-hidden-block", !visible);
+    });
+
+    (state.nodes.tabButtons || []).forEach((button) => {
+      button.classList.toggle("active", button.dataset.section === nextSection);
+    });
+    (state.nodes.dockButtons || []).forEach((button) => {
+      button.classList.toggle("active", button.dataset.section === nextSection);
+    });
+  };
+
+  const openSectionFromMenu = (section) => {
+    setActiveSection(section);
+    if (state.collapsed) {
+      state.collapsed = false;
+      state.nodes.bodyEl?.classList.remove("wacrm-hidden");
+      const toggle = state.nodes.root?.querySelector("#wacrm-toggle");
+      if (toggle) {
+        toggle.textContent = "Minimizar";
+      }
+    }
   };
 
   const setModeState = () => {
@@ -494,6 +751,9 @@
 
     const previousKey = state.currentChat?.key;
     state.currentChat = chat;
+    if (previousKey !== chat.key) {
+      void markTutorialStep("open_chat");
+    }
     if (state.nodes.chatEl) {
       state.nodes.chatEl.textContent = chat.phoneGuess
         ? `${chat.name} (${chat.phoneGuess})`
@@ -520,6 +780,7 @@
       state.currentLead = null;
       renderTemplates();
       fillProfileForm(null);
+      renderHotLeads();
       setModeState();
       updateLeadMeta();
       updatePipelineMeta();
@@ -533,6 +794,13 @@
     state.canUseCrm = Boolean(state.subscription?.canUseCrm);
 
     if (!state.canUseCrm) {
+      state.templates = [];
+      state.leads = [];
+      state.currentLead = null;
+      renderTemplates();
+      renderHotLeads();
+      updateLeadMeta();
+      updatePipelineMeta();
       setModeState();
       setStatus("Sesion activa, pero suscripcion inactiva.", true);
       return;
@@ -546,6 +814,7 @@
     state.leads = leadsData.leads || [];
     renderTemplates();
     updatePipelineMeta();
+    renderHotLeads();
     syncLeadWithPhone();
     setModeState();
     setStatus(`CRM inmobiliario activo para ${state.me?.email || "workspace actual"}.`);
@@ -571,6 +840,7 @@
     composer.focus();
     composer.textContent = message;
     composer.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: message }));
+    void markTutorialStep("insert_template");
     setStatus("Plantilla insertada. Revisa y envia manualmente.");
   };
 
@@ -602,7 +872,9 @@
         method: "POST",
         body: JSON.stringify({ note: buildProfileNote(profile) }),
       });
+      void markTutorialStep("add_profile");
     }
+    void markTutorialStep("save_lead");
     setStatus("Lead/ficha guardados.");
     await fetchWorkspaceData();
   };
@@ -628,6 +900,7 @@
       method: "PATCH",
       body: JSON.stringify({ stage }),
     });
+    void markTutorialStep("set_stage");
     setStatus("Etapa actualizada.");
     await fetchWorkspaceData();
   };
@@ -644,6 +917,7 @@
         body: JSON.stringify({ note: shortcut.note }),
       });
     }
+    void markTutorialStep("set_stage");
     setStatus(`Atajo aplicado: ${shortcut.label}.`);
     await fetchWorkspaceData();
   };
@@ -687,6 +961,7 @@
       }),
     });
     state.nodes.reminderNoteInput.value = "";
+    void markTutorialStep("create_followup");
     setStatus("Recordatorio creado.");
   };
 
@@ -707,6 +982,7 @@
         dueAt,
       }),
     });
+    void markTutorialStep("create_followup");
     setStatus("Seguimiento rapido creado.");
   };
 
@@ -725,6 +1001,27 @@
     }
   };
 
+  const createDock = () => {
+    const dock = document.createElement("aside");
+    dock.id = "wacrm-dock";
+    dock.innerHTML = `
+      <button type="button" class="wacrm-dock-item active" data-section="overview">Inicio</button>
+      <button type="button" class="wacrm-dock-item" data-section="lead">Leads</button>
+      <button type="button" class="wacrm-dock-item" data-section="actions">Acciones</button>
+      <button type="button" class="wacrm-dock-item" data-section="tutorial">Tutorial</button>
+      <button type="button" class="wacrm-dock-item" data-section="all">Todo</button>
+    `;
+    document.body.appendChild(dock);
+
+    state.nodes.dock = dock;
+    state.nodes.dockButtons = Array.from(dock.querySelectorAll("[data-section]"));
+    state.nodes.dockButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        openSectionFromMenu(button.dataset.section || "overview");
+      });
+    });
+  };
+
   const createPanel = () => {
     const root = document.createElement("aside");
     root.id = "wacrm-root";
@@ -736,14 +1033,33 @@
         </div>
         <div class="wacrm-body" id="wacrm-body">
           <p class="wacrm-status" id="wacrm-status">Inicializando CRM...</p>
+          <div class="wacrm-tabs" id="wacrm-tabs">
+            <button type="button" class="wacrm-tab active" data-section="overview">Inicio</button>
+            <button type="button" class="wacrm-tab" data-section="lead">Leads</button>
+            <button type="button" class="wacrm-tab" data-section="actions">Acciones</button>
+            <button type="button" class="wacrm-tab" data-section="tutorial">Tutorial</button>
+          </div>
           <div class="wacrm-block" id="wacrm-gate"></div>
           <div class="wacrm-grid wacrm-hidden" id="wacrm-tools">
-            <div class="wacrm-block">
+            <div class="wacrm-block" data-section="overview">
               <h4>Chat actual</h4>
               <p class="wacrm-meta" id="wacrm-chat-meta">Abre una conversacion para gestionar.</p>
               <p class="wacrm-meta" id="wacrm-pipeline-meta">Pipeline: new:0 | contacted:0 | qualified:0 | won:0 | lost:0</p>
             </div>
-            <div class="wacrm-block">
+            <div class="wacrm-block" data-section="tutorial">
+              <h4>Tutorial rapido</h4>
+              <p class="wacrm-meta" id="wacrm-tutorial-summary">Progreso tutorial: 0/6</p>
+              <div class="wacrm-checklist" id="wacrm-tutorial-list"></div>
+              <div class="wacrm-actions">
+                <button type="button" class="wacrm-btn ghost" id="wacrm-reset-tutorial">Reiniciar tutorial</button>
+              </div>
+            </div>
+            <div class="wacrm-block" data-section="overview">
+              <h4>Leads calientes hoy</h4>
+              <p class="wacrm-meta" id="wacrm-hot-meta">Sin leads calientes hoy.</p>
+              <div class="wacrm-hot-list" id="wacrm-hot-leads"></div>
+            </div>
+            <div class="wacrm-block" data-section="lead">
               <h4>Lead rapido</h4>
               <label class="wacrm-label">Nombre<input class="wacrm-input" id="wacrm-name" /></label>
               <label class="wacrm-label">Telefono E.164<input class="wacrm-input" id="wacrm-phone" placeholder="+51999999999" /></label>
@@ -766,7 +1082,7 @@
               <div class="wacrm-actions" id="wacrm-stage-shortcuts"></div>
               <p class="wacrm-meta" id="wacrm-lead-meta">Sin lead asociado al chat actual.</p>
             </div>
-            <div class="wacrm-block">
+            <div class="wacrm-block" data-section="lead">
               <h4>Ficha inmobiliaria</h4>
               <div class="wacrm-grid two">
                 <label class="wacrm-label">Operacion
@@ -805,7 +1121,7 @@
               </div>
               <p class="wacrm-meta">Al guardar lead se guarda la ficha y se generan etiquetas automaticamente.</p>
             </div>
-            <div class="wacrm-block">
+            <div class="wacrm-block" data-section="actions">
               <h4>Plantilla en chat</h4>
               <label class="wacrm-label">Plantilla
                 <select class="wacrm-select" id="wacrm-template"></select>
@@ -813,7 +1129,7 @@
               <button type="button" class="wacrm-btn secondary" id="wacrm-insert-template">Insertar en caja de mensaje</button>
               <p class="wacrm-meta">No envia automaticamente. Solo inserta texto para envio manual.</p>
             </div>
-            <div class="wacrm-block">
+            <div class="wacrm-block" data-section="actions">
               <h4>Notas y recordatorios</h4>
               <label class="wacrm-label">Nota
                 <textarea class="wacrm-textarea" id="wacrm-note" placeholder="Escribe seguimiento..."></textarea>
@@ -845,10 +1161,15 @@
     state.nodes.root = root;
     state.nodes.bodyEl = root.querySelector("#wacrm-body");
     state.nodes.statusEl = root.querySelector("#wacrm-status");
+    state.nodes.tabButtons = Array.from(root.querySelectorAll("#wacrm-tabs [data-section]"));
     state.nodes.gateEl = root.querySelector("#wacrm-gate");
     state.nodes.toolsEl = root.querySelector("#wacrm-tools");
     state.nodes.chatEl = root.querySelector("#wacrm-chat-meta");
     state.nodes.pipelineMetaEl = root.querySelector("#wacrm-pipeline-meta");
+    state.nodes.tutorialSummaryEl = root.querySelector("#wacrm-tutorial-summary");
+    state.nodes.tutorialListEl = root.querySelector("#wacrm-tutorial-list");
+    state.nodes.hotLeadsMetaEl = root.querySelector("#wacrm-hot-meta");
+    state.nodes.hotLeadsEl = root.querySelector("#wacrm-hot-leads");
     state.nodes.nameInput = root.querySelector("#wacrm-name");
     state.nodes.phoneInput = root.querySelector("#wacrm-phone");
     state.nodes.stageSelect = root.querySelector("#wacrm-stage");
@@ -893,11 +1214,19 @@
     state.nodes.consentSelect.value = "opted_in";
     renderTagSuggestions();
     renderStageShortcuts();
+    renderTutorial();
+    renderHotLeads();
 
     root.querySelector("#wacrm-toggle").addEventListener("click", () => {
       state.collapsed = !state.collapsed;
       state.nodes.bodyEl.classList.toggle("wacrm-hidden", state.collapsed);
       root.querySelector("#wacrm-toggle").textContent = state.collapsed ? "Expandir" : "Minimizar";
+    });
+
+    state.nodes.tabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        setActiveSection(button.dataset.section || "overview");
+      });
     });
 
     root.querySelector("#wacrm-refresh").addEventListener("click", () => {
@@ -921,16 +1250,22 @@
     root.querySelector("#wacrm-quick-followup").addEventListener("click", () => {
       void withSyncGuard(createQuickFollowup);
     });
+    root.querySelector("#wacrm-reset-tutorial").addEventListener("click", () => {
+      void resetTutorial();
+    });
 
     state.nodes.phoneInput.addEventListener("input", () => {
       syncLeadWithPhone();
     });
+    setActiveSection(state.activeSection);
   };
 
   const syncConfigFromStorage = async () => {
     const values = await storageGet(STORAGE_KEYS);
     state.apiBaseUrl = String(values.crm_api_base_url || "").trim() || DEFAULT_API_BASE_URL;
     state.token = String(values.crm_token || "").trim();
+    state.tutorialProgress = normalizeTutorialProgress(values[TUTORIAL_PROGRESS_KEY]);
+    renderTutorial();
   };
 
   const startWatchers = () => {
@@ -964,6 +1299,8 @@
 
   const init = async () => {
     createPanel();
+    createDock();
+    setActiveSection(state.activeSection);
     await syncConfigFromStorage();
     renderChatInfo();
     setModeState();
