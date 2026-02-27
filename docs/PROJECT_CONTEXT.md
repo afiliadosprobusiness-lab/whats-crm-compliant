@@ -14,7 +14,7 @@ Proyecto: `whatsapp-crm-compliant`
 1. Auth multiusuario:
    - Registro owner por empresa.
    - Login/logout por token bearer.
-   - Login con Google (Firebase Auth) desde extension.
+   - Endpoint Google Auth disponible en API (`POST /api/v1/auth/google`) para integraciones controladas.
    - Gestion de usuarios del workspace (owner crea agentes).
 2. Suscripcion:
    - Estado por workspace.
@@ -46,10 +46,8 @@ Proyecto: `whatsapp-crm-compliant`
 ## Frontend de Extension
 
 - Popup unico con:
-  - Config de `API Base URL` (local o Vercel).
-  - Config de `Google OAuth Client ID` + `Firebase Web API Key`.
+  - Configuracion bloqueada a backend productivo (`https://whats-crm-compliant.vercel.app/api/v1`) para evitar errores por edicion manual.
   - Login/registro owner.
-  - Login con Google (OAuth extension + Firebase Auth).
   - Panel embebido en `web.whatsapp.com` via content script (lead rapido, notas, recordatorios, insertar plantilla).
   - Panel embebido con flujo inmobiliario: etiquetas sugeridas, atajos de pipeline, ficha de perfil y seguimiento rapido por horas.
   - Seguimiento manual asistido en panel embebido con limite diario local de cumplimiento (`20/dia`), siempre con envio manual.

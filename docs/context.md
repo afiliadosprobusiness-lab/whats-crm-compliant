@@ -15,6 +15,8 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
   - `reminders`
   - `whatsapp` (webhooks/envio)
 - `apps/extension`: extension Chrome MV3 (popup) para operacion comercial diaria.
+  - Popup con endpoint API fijo a produccion (sin edicion manual de URL/keys) para reducir errores operativos.
+  - Acceso en popup por email/password (sin configuracion manual de Google/OAuth en UI final).
   - Incluye `content_script` en `web.whatsapp.com` para panel CRM embebido (sin auto-envio), con foco inmobiliario:
     - ficha de lead (operacion, tipo de propiedad, zona, presupuesto, fuente, urgencia)
     - etiquetas sugeridas + atajos de etapa

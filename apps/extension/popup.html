@@ -16,25 +16,6 @@
 
       <section class="card">
         <h2>Acceso</h2>
-        <form id="api-config-form" class="grid auth-subform">
-          <label>
-            API Base URL
-            <input id="api-base-url" name="apiBaseUrl" required />
-          </label>
-          <label>
-            Google OAuth Client ID
-            <input
-              id="google-client-id"
-              name="googleClientId"
-              placeholder="xxxxxx-xxxx.apps.googleusercontent.com"
-            />
-          </label>
-          <label>
-            Firebase Web API Key
-            <input id="firebase-web-api-key" name="firebaseWebApiKey" placeholder="AIza..." />
-          </label>
-          <button type="submit">Guardar configuracion</button>
-        </form>
         <form id="login-form" class="grid">
           <label>
             Email
@@ -46,8 +27,6 @@
           </label>
           <button type="submit">Iniciar sesion</button>
         </form>
-        <button id="google-login-btn" type="button" class="secondary-btn">Continuar con Google</button>
-        <small class="hint">Requiere Google habilitado en Firebase Authentication.</small>
         <details>
           <summary>Crear cuenta owner</summary>
           <form id="register-form" class="grid auth-subform">

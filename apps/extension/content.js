@@ -18,7 +18,7 @@
   const FOLLOWUP_USAGE_RETENTION_DAYS = 45;
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
-  const CRM_BUILD_TAG = "0.4.3-2026-02-27";
+  const CRM_BUILD_TAG = "0.4.4-2026-02-27";
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const TUTORIAL_STEPS = [
     {
