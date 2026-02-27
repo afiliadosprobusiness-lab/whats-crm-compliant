@@ -64,7 +64,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 ## Variables de Entorno
 
 - `PORT`
-- `APP_ORIGIN`
+- `APP_ORIGIN` (uno o varios origins separados por coma para front web)
 - `WHATSAPP_ACCESS_TOKEN`
 - `WHATSAPP_PHONE_NUMBER_ID`
 - `WHATSAPP_VERIFY_TOKEN`
@@ -90,6 +90,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Envio masivo restringido a leads `opted_in`.
 - Throttling basico por minuto para campanas.
 - CORS restringido por `APP_ORIGIN`.
+- Requests desde `chrome-extension://*` estan permitidos para uso de extension local (load unpacked).
 - Firestore rules por defecto en modo backend-only (`allow false` para SDK cliente directo).
 
 ## Dependencias Criticas

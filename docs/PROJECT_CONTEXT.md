@@ -7,6 +7,7 @@ Proyecto: `whatsapp-crm-compliant`
 - Cumplimiento: no automatiza DOM de WhatsApp Web; opera por backend + Cloud API opcional.
 - Backend deployado: `https://whats-crm-compliant.vercel.app`.
 - Firebase activo: `whats-crm-compliant-2026` con Firestore default (`nam5`).
+- CORS backend permite origenes web definidos en `APP_ORIGIN` y tambien `chrome-extension://*` para popup local.
 
 ## Modulos MVP Actuales
 

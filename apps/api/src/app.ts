@@ -37,6 +37,21 @@ import { WhatsAppService } from "./modules/whatsapp/whatsapp.service.js";
 
 export const createApp = () => {
   const env = loadEnv();
+  const allowedWebOrigins = env.appOrigin
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const isAllowedOrigin = (origin: string | undefined): boolean => {
+    if (!origin) {
+      return true;
+    }
+
+    if (origin.startsWith("chrome-extension://")) {
+      return true;
+    }
+
+    return allowedWebOrigins.includes(origin);
+  };
 
   const authRepository = new AuthRepository();
   const leadsRepository = new LeadsRepository();
@@ -73,7 +88,9 @@ export const createApp = () => {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.appOrigin,
+      origin: (origin, callback) => {
+        callback(null, isAllowedOrigin(origin));
+      },
       credentials: false,
     }),
   );
