@@ -88,19 +88,14 @@
   };
 
   const getWhatsAppLoggedIn = () => {
-    if (document.querySelector("[data-testid='qrcode']")) {
-      return false;
-    }
+    const hasChatUi =
+      Boolean(document.querySelector("#pane-side")) ||
+      Boolean(document.querySelector("#side")) ||
+      Boolean(document.querySelector("#main header")) ||
+      Boolean(document.querySelector("[data-testid='chat-list-search']")) ||
+      Boolean(document.querySelector("footer [contenteditable='true'][role='textbox']"));
 
-    if (document.querySelector("#pane-side") || document.querySelector("#side")) {
-      return true;
-    }
-
-    if (document.querySelector("#main header")) {
-      return true;
-    }
-
-    if (document.querySelector("[data-testid='chat-list-search']")) {
+    if (hasChatUi) {
       return true;
     }
 
