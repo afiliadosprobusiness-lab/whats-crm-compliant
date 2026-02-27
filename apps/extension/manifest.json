@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WhatsApp CRM Compliant",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "CRM ligero para leads y campanas de WhatsApp con enfoque de cumplimiento.",
   "action": {
     "default_title": "WhatsApp CRM",

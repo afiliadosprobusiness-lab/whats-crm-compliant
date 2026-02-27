@@ -14,7 +14,7 @@
   ];
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
-  const CRM_BUILD_TAG = "0.4.0-2026-02-27";
+  const CRM_BUILD_TAG = "0.4.1-2026-02-27";
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const TUTORIAL_STEPS = [
     {
@@ -126,6 +126,7 @@
     currentLead: null,
     currentChat: null,
     activeSection: "overview",
+    dockOpen: false,
     collapsed: false,
     syncing: false,
     syncTimer: null,
@@ -593,6 +594,14 @@
         toggle.textContent = "Minimizar";
       }
     }
+    setModeState();
+    if (!state.token) {
+      setStatus("Inicia sesion en la extension para habilitar este modulo.", true);
+    } else if (!state.canUseCrm) {
+      setStatus("Suscripcion inactiva. Renuevala para usar el CRM.", true);
+    } else {
+      setStatus(`Modulo activo: ${section}.`);
+    }
   };
 
   const setModeState = () => {
@@ -1005,19 +1014,30 @@
     const dock = document.createElement("aside");
     dock.id = "wacrm-dock";
     dock.innerHTML = `
-      <button type="button" class="wacrm-dock-item active" data-section="overview">Inicio</button>
-      <button type="button" class="wacrm-dock-item" data-section="lead">Leads</button>
-      <button type="button" class="wacrm-dock-item" data-section="actions">Acciones</button>
-      <button type="button" class="wacrm-dock-item" data-section="tutorial">Tutorial</button>
-      <button type="button" class="wacrm-dock-item" data-section="all">Todo</button>
+      <button type="button" class="wacrm-dock-toggle" id="wacrm-dock-toggle" title="Abrir menu CRM">CRM</button>
+      <div class="wacrm-dock-menu" id="wacrm-dock-menu">
+        <button type="button" class="wacrm-dock-item active" data-section="overview" title="Inicio">H</button>
+        <button type="button" class="wacrm-dock-item" data-section="lead" title="Leads">L</button>
+        <button type="button" class="wacrm-dock-item" data-section="actions" title="Acciones">A</button>
+        <button type="button" class="wacrm-dock-item" data-section="tutorial" title="Tutorial">T</button>
+        <button type="button" class="wacrm-dock-item" data-section="all" title="Todo">+</button>
+      </div>
     `;
     document.body.appendChild(dock);
 
     state.nodes.dock = dock;
+    state.nodes.dockMenu = dock.querySelector("#wacrm-dock-menu");
+    state.nodes.dockToggle = dock.querySelector("#wacrm-dock-toggle");
     state.nodes.dockButtons = Array.from(dock.querySelectorAll("[data-section]"));
+    state.nodes.dockToggle?.addEventListener("click", () => {
+      state.dockOpen = !state.dockOpen;
+      state.nodes.dock?.classList.toggle("open", state.dockOpen);
+    });
     state.nodes.dockButtons.forEach((button) => {
       button.addEventListener("click", () => {
         openSectionFromMenu(button.dataset.section || "overview");
+        state.dockOpen = false;
+        state.nodes.dock?.classList.remove("open");
       });
     });
   };
