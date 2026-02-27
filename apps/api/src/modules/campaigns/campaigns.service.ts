@@ -89,9 +89,34 @@ export class CampaignsService {
       });
     }
 
+    const leadRecords = await this.leadsRepository.findManyByIds(workspaceId, campaign.recipientLeadIds);
+    const leadById = new Map(leadRecords.map((lead) => [lead.id, lead]));
+    const optedInRecipientCount = campaign.recipientLeadIds.reduce((acc, leadId) => {
+      const lead = leadId ? leadById.get(leadId) : null;
+      return lead && lead.consentStatus === "opted_in" ? acc + 1 : acc;
+    }, 0);
+
+    const nowIso = new Date().toISOString();
+    const dayKey = this.getDayKeyUtc(nowIso);
+    const sentToday = await this.campaignsRepository.countSentMessagesForDay(workspaceId, dayKey);
+    const remainingDailyQuota = Math.max(0, this.env.maxCampaignMessagesPerDay - sentToday);
+    if (optedInRecipientCount > remainingDailyQuota) {
+      throw new AppError({
+        statusCode: 429,
+        code: "RATE_LIMITED",
+        message: "Limite diario de envios alcanzado para este workspace",
+        details: {
+          maxCampaignMessagesPerDay: this.env.maxCampaignMessagesPerDay,
+          sentToday,
+          remainingDailyQuota,
+          attemptedOptedInRecipients: optedInRecipientCount,
+        },
+      });
+    }
+
     await this.campaignsRepository.update(workspaceId, campaignId, {
       status: "sending",
-      lastRunAt: new Date().toISOString(),
+      lastRunAt: nowIso,
     });
 
     const results: CampaignSendResult[] = [];
@@ -115,27 +140,56 @@ export class CampaignsService {
         continue;
       }
 
-      const lead = await this.leadsRepository.findById(workspaceId, leadId);
+      const lead = leadById.get(leadId);
+      const sentAt = new Date().toISOString();
 
       if (!lead) {
         failedCount += 1;
-        results.push({
+        const result: CampaignSendResult = {
           leadId,
           phoneE164: "",
           status: "failed",
           provider: "dry_run",
           messageId: null,
           error: "Lead no encontrado",
+        };
+        results.push(result);
+        await this.campaignsRepository.createOutboundLog({
+          id: createId("out"),
+          workspaceId,
+          workspaceDayKey: `${workspaceId}_${this.getDayKeyUtc(sentAt)}`,
+          campaignId,
+          leadId,
+          phoneE164: "",
+          status: result.status,
+          provider: result.provider,
+          messageId: result.messageId,
+          error: result.error,
+          sentAt,
         });
       } else if (lead.consentStatus !== "opted_in") {
         failedCount += 1;
-        results.push({
+        const result: CampaignSendResult = {
           leadId: lead.id,
           phoneE164: lead.phoneE164,
           status: "failed",
           provider: "dry_run",
           messageId: null,
           error: "Lead sin consentimiento opted_in",
+        };
+        results.push(result);
+        await this.campaignsRepository.createOutboundLog({
+          id: createId("out"),
+          workspaceId,
+          workspaceDayKey: `${workspaceId}_${this.getDayKeyUtc(sentAt)}`,
+          campaignId,
+          leadId: result.leadId,
+          phoneE164: result.phoneE164,
+          status: result.status,
+          provider: result.provider,
+          messageId: result.messageId,
+          error: result.error,
+          sentAt,
         });
       } else {
         const text = this.interpolate(template, lead.name);
@@ -146,13 +200,27 @@ export class CampaignsService {
           failedCount += 1;
         }
 
-        results.push({
+        const result: CampaignSendResult = {
           leadId: lead.id,
           phoneE164: lead.phoneE164,
           status: sendResult.status,
           provider: sendResult.provider,
           messageId: sendResult.messageId,
           error: sendResult.error,
+        };
+        results.push(result);
+        await this.campaignsRepository.createOutboundLog({
+          id: createId("out"),
+          workspaceId,
+          workspaceDayKey: `${workspaceId}_${this.getDayKeyUtc(sentAt)}`,
+          campaignId,
+          leadId: result.leadId,
+          phoneE164: result.phoneE164,
+          status: result.status,
+          provider: result.provider,
+          messageId: result.messageId,
+          error: result.error,
+          sentAt,
         });
       }
 
@@ -178,6 +246,10 @@ export class CampaignsService {
     }
 
     return { campaign: updated, results };
+  }
+
+  private getDayKeyUtc(isoDate: string): string {
+    return isoDate.slice(0, 10);
   }
 
   private interpolate(template: Template, leadName: string): string {

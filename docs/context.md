@@ -15,6 +15,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
   - `reminders`
   - `whatsapp` (webhooks/envio)
 - `apps/extension`: extension Chrome MV3 (popup) para operacion comercial diaria.
+  - Incluye `content_script` en `web.whatsapp.com` para panel CRM embebido (sin auto-envio).
 - Persistencia actual: Firestore (colecciones por modulo).
 - Runtime de despliegue: Vercel Serverless (`apps/api/src/vercel.ts` + `vercel.json`).
 
@@ -70,6 +71,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - `WHATSAPP_VERIFY_TOKEN`
 - `WHATSAPP_GRAPH_API_VERSION`
 - `MAX_CAMPAIGN_MESSAGES_PER_MINUTE`
+- `MAX_CAMPAIGN_MESSAGES_PER_DAY`
 - `PLAN_MONTHLY_PRICE_PEN`
 - `BILLING_PERIOD_DAYS`
 - `SESSION_TTL_DAYS`
@@ -89,6 +91,8 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Gate de suscripcion activa para operaciones CRM.
 - Envio masivo restringido a leads `opted_in`.
 - Throttling basico por minuto para campanas.
+- Limite diario por workspace para campanas (`MAX_CAMPAIGN_MESSAGES_PER_DAY`).
+- El panel en WhatsApp Web solo inserta texto en composer; el envio final queda manual por el usuario.
 - CORS restringido por `APP_ORIGIN`.
 - Requests desde `chrome-extension://*` estan permitidos para uso de extension local (load unpacked).
 - Firestore rules por defecto en modo backend-only (`allow false` para SDK cliente directo).

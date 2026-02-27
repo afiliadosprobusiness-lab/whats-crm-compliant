@@ -24,6 +24,27 @@ const apiBaseUrlInput = document.getElementById("api-base-url");
 const googleClientIdInput = document.getElementById("google-client-id");
 const firebaseWebApiKeyInput = document.getElementById("firebase-web-api-key");
 const googleLoginButtonEl = document.getElementById("google-login-btn");
+const hasChromeStorage = typeof chrome !== "undefined" && Boolean(chrome.storage?.local);
+
+const storageGet = async (keys) => {
+  if (!hasChromeStorage) {
+    return {};
+  }
+
+  return new Promise((resolve) => {
+    chrome.storage.local.get(keys, (result) => resolve(result || {}));
+  });
+};
+
+const storageSet = async (values) => {
+  if (!hasChromeStorage) {
+    return;
+  }
+
+  return new Promise((resolve) => {
+    chrome.storage.local.set(values, () => resolve());
+  });
+};
 
 const setFeedback = (text, isError = false) => {
   feedbackEl.textContent = text;
@@ -43,12 +64,14 @@ const persistToken = (token) => {
   } else {
     localStorage.removeItem("crm_token");
   }
+  void storageSet({ crm_token: token || "" });
 };
 
 const persistApiBaseUrl = (nextApiBaseUrl) => {
   state.apiBaseUrl = nextApiBaseUrl;
   localStorage.setItem("crm_api_base_url", nextApiBaseUrl);
   apiBaseUrlInput.value = nextApiBaseUrl;
+  void storageSet({ crm_api_base_url: nextApiBaseUrl });
 };
 
 const persistGoogleClientId = (nextGoogleClientId) => {
@@ -59,6 +82,7 @@ const persistGoogleClientId = (nextGoogleClientId) => {
     localStorage.removeItem("crm_google_client_id");
   }
   googleClientIdInput.value = nextGoogleClientId;
+  void storageSet({ crm_google_client_id: nextGoogleClientId });
 };
 
 const persistFirebaseWebApiKey = (nextApiKey) => {
@@ -69,6 +93,7 @@ const persistFirebaseWebApiKey = (nextApiKey) => {
     localStorage.removeItem("crm_firebase_web_api_key");
   }
   firebaseWebApiKeyInput.value = nextApiKey;
+  void storageSet({ crm_firebase_web_api_key: nextApiKey });
 };
 
 const apiRequest = async (path, options = {}) => {
@@ -631,6 +656,32 @@ document.getElementById("reminder-form").addEventListener("submit", async (event
 });
 
 const bootstrap = async () => {
+  const shared = await storageGet([
+    "crm_api_base_url",
+    "crm_google_client_id",
+    "crm_firebase_web_api_key",
+    "crm_token",
+  ]);
+
+  if (typeof shared.crm_api_base_url === "string" && shared.crm_api_base_url.trim()) {
+    state.apiBaseUrl = shared.crm_api_base_url.trim();
+    localStorage.setItem("crm_api_base_url", state.apiBaseUrl);
+  }
+  if (typeof shared.crm_google_client_id === "string") {
+    state.googleClientId = shared.crm_google_client_id.trim();
+    if (state.googleClientId) {
+      localStorage.setItem("crm_google_client_id", state.googleClientId);
+    }
+  }
+  if (typeof shared.crm_firebase_web_api_key === "string" && shared.crm_firebase_web_api_key.trim()) {
+    state.firebaseWebApiKey = shared.crm_firebase_web_api_key.trim();
+    localStorage.setItem("crm_firebase_web_api_key", state.firebaseWebApiKey);
+  }
+  if (typeof shared.crm_token === "string" && shared.crm_token.trim()) {
+    state.token = shared.crm_token.trim();
+    localStorage.setItem("crm_token", state.token);
+  }
+
   apiBaseUrlInput.value = state.apiBaseUrl;
   googleClientIdInput.value = state.googleClientId;
   firebaseWebApiKeyInput.value = state.firebaseWebApiKey;

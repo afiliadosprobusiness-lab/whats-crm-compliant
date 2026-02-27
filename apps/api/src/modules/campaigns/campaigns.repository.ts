@@ -1,7 +1,8 @@
 import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
-import type { Campaign } from "./campaigns.types.js";
+import type { Campaign, OutboundMessageLog } from "./campaigns.types.js";
 
 const COLLECTION = "campaigns";
+const OUTBOUND_COLLECTION = "outbound_messages";
 
 export class CampaignsRepository {
   private readonly db = getFirebaseDb();
@@ -43,5 +44,21 @@ export class CampaignsRepository {
     await this.db.collection(COLLECTION).doc(campaignId).set(updated);
     return updated;
   }
-}
 
+  public async createOutboundLog(log: OutboundMessageLog): Promise<void> {
+    await this.db.collection(OUTBOUND_COLLECTION).doc(log.id).set(log);
+  }
+
+  public async countSentMessagesForDay(workspaceId: string, dayKey: string): Promise<number> {
+    const workspaceDayKey = `${workspaceId}_${dayKey}`;
+    const querySnap = await this.db
+      .collection(OUTBOUND_COLLECTION)
+      .where("workspaceDayKey", "==", workspaceDayKey)
+      .get();
+
+    return querySnap.docs.reduce((acc, doc) => {
+      const log = doc.data() as OutboundMessageLog;
+      return log.status === "sent" ? acc + 1 : acc;
+    }, 0);
+  }
+}

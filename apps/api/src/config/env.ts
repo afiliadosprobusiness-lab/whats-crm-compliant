@@ -6,6 +6,7 @@ export type EnvConfig = {
   whatsappVerifyToken: string;
   whatsappGraphApiVersion: string;
   maxCampaignMessagesPerMinute: number;
+  maxCampaignMessagesPerDay: number;
   planMonthlyPricePen: number;
   billingPeriodDays: number;
   sessionTtlDays: number;
@@ -35,6 +36,10 @@ export const loadEnv = (): EnvConfig => {
     maxCampaignMessagesPerMinute: Math.max(
       1,
       parseIntWithFallback(process.env.MAX_CAMPAIGN_MESSAGES_PER_MINUTE, 20),
+    ),
+    maxCampaignMessagesPerDay: Math.max(
+      1,
+      parseIntWithFallback(process.env.MAX_CAMPAIGN_MESSAGES_PER_DAY, 200),
     ),
     planMonthlyPricePen: Math.max(1, parseIntWithFallback(process.env.PLAN_MONTHLY_PRICE_PEN, 50)),
     billingPeriodDays: Math.max(1, parseIntWithFallback(process.env.BILLING_PERIOD_DAYS, 30)),

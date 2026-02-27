@@ -15,8 +15,10 @@ CRM WhatsApp MVP para cobro mensual base de S/50, con backend deployable en Verc
 - Auth multiusuario por workspace (`owner`, `agent`) + login Google (Firebase Auth)
 - Suscripcion mensual por workspace
 - Leads, pipeline, notas, plantillas, campanas y recordatorios
+- Panel CRM embebido en `web.whatsapp.com` (lead rapido + notas + recordatorios + insertar plantilla)
 - Webhook WhatsApp (Cloud API opcional, `dry_run` fallback)
 - Bloqueo CRM si suscripcion no activa
+- Limites de cumplimiento para campanas: por minuto y por dia
 - Persistencia en Firestore (ya no memoria)
 
 ## Estructura
@@ -56,6 +58,7 @@ Base:
 - `BILLING_PERIOD_DAYS`
 - `SESSION_TTL_DAYS`
 - `MAX_CAMPAIGN_MESSAGES_PER_MINUTE`
+- `MAX_CAMPAIGN_MESSAGES_PER_DAY`
 - `WHATSAPP_VERIFY_TOKEN`
 - `WHATSAPP_GRAPH_API_VERSION`
 
@@ -127,6 +130,7 @@ npm run vercel:deploy:prod
    - `Google OAuth Client ID`
    - `Firebase Web API Key`
 7. Usar boton `Continuar con Google`.
+8. Ir a `https://web.whatsapp.com` y usar el panel flotante `CRM WhatsApp` dentro del chat.
 
 ## ZIP de extension
 
@@ -140,6 +144,7 @@ Salida:
 
 ## Cumplimiento
 
-- No automatiza `web.whatsapp.com`
+- No automatiza envio en `web.whatsapp.com` (solo inserta texto; el usuario envia manualmente)
 - Envio masivo solo a `opted_in`
+- Limite diario configurable por workspace (`MAX_CAMPAIGN_MESSAGES_PER_DAY`)
 - Errores estructurados sin filtrar secretos

@@ -29,6 +29,7 @@ Proyecto: `whatsapp-crm-compliant`
 5. Campanas:
    - Creacion por plantilla + leads.
    - Envio con limite por minuto.
+   - Limite diario por workspace para cumplimiento.
    - Bloqueo para leads sin `opted_in`.
 6. Recordatorios:
    - Creacion por lead con fecha/hora.
@@ -45,6 +46,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Config de `Google OAuth Client ID` + `Firebase Web API Key`.
   - Login/registro owner.
   - Login con Google (OAuth extension + Firebase Auth).
+  - Panel embebido en `web.whatsapp.com` via content script (lead rapido, notas, recordatorios, insertar plantilla).
   - Estado de sesion.
   - Estado y renovacion de suscripcion.
   - KPIs basicos.
@@ -57,5 +59,6 @@ Proyecto: `whatsapp-crm-compliant`
 ## Estado
 
 - Funcional para cobro mensual y operacion real.
+- En WhatsApp Web no hay auto-envio: la extension inserta mensajes y el usuario confirma envio manual.
 - Firebase Auth Google requiere activar `Get started` + provider `Google` en Firebase Console si aun no se hizo.
 - Pendiente para robustez enterprise: cola de envios, observabilidad avanzada, billing automatizado real, rotacion de claves y backups operativos.

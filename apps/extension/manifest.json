@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WhatsApp CRM Compliant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CRM ligero para leads y campanas de WhatsApp con enfoque de cumplimiento.",
   "action": {
     "default_title": "WhatsApp CRM",
@@ -11,6 +11,15 @@
   "host_permissions": [
     "http://localhost:4001/*",
     "https://whats-crm-compliant.vercel.app/*",
-    "https://identitytoolkit.googleapis.com/*"
+    "https://identitytoolkit.googleapis.com/*",
+    "https://web.whatsapp.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
   ]
 }

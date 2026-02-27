@@ -4,6 +4,7 @@ export type AppErrorCode =
   | "PAYMENT_REQUIRED"
   | "NOT_FOUND"
   | "CONFLICT"
+  | "RATE_LIMITED"
   | "FORBIDDEN"
   | "INTERNAL_ERROR";
 

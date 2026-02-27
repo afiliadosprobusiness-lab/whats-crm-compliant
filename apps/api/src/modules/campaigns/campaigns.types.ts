@@ -26,6 +26,20 @@ export type CampaignSendResult = {
   error: string | null;
 };
 
+export type OutboundMessageLog = {
+  id: string;
+  workspaceId: string;
+  workspaceDayKey: string;
+  campaignId: string;
+  leadId: string;
+  phoneE164: string;
+  status: SendMessageResult["status"];
+  provider: SendMessageResult["provider"];
+  messageId: string | null;
+  error: string | null;
+  sentAt: string;
+};
+
 export const createCampaignSchema = z.object({
   name: z.string().trim().min(2).max(120),
   templateId: z.string().trim().min(1),

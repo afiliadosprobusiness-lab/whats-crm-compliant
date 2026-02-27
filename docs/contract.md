@@ -326,6 +326,9 @@ Response `200`:
 }
 ```
 
+Posibles errores adicionales:
+- `429 RATE_LIMITED` cuando el workspace supera `MAX_CAMPAIGN_MESSAGES_PER_DAY`.
+
 ### `POST /api/v1/reminders`
 
 Request:
@@ -391,3 +394,8 @@ Lista de eventos recientes (debug MVP).
 - Cambio: nuevo endpoint `POST /api/v1/auth/google` para login/registro con Firebase Auth Google
 - Tipo: non-breaking
 - Impacto: se agrega acceso por Google sin afectar login tradicional por email/password
+
+- Fecha: 2026-02-27
+- Cambio: `POST /api/v1/campaigns/:campaignId/send` puede responder `429 RATE_LIMITED` por limite diario configurable
+- Tipo: non-breaking
+- Impacto: agrega guarda de cumplimiento para envios masivos diarios por workspace
