@@ -88,12 +88,25 @@
   };
 
   const getWhatsAppLoggedIn = () => {
+    const hasQrUi =
+      Boolean(document.querySelector("[data-testid='qrcode']")) ||
+      Boolean(document.querySelector("canvas[aria-label*='QR']")) ||
+      Boolean(document.querySelector("div[data-ref] canvas"));
+
+    if (hasQrUi) {
+      return false;
+    }
+
     const hasChatUi =
       Boolean(document.querySelector("#pane-side")) ||
       Boolean(document.querySelector("#side")) ||
       Boolean(document.querySelector("#main header")) ||
       Boolean(document.querySelector("[data-testid='chat-list-search']")) ||
-      Boolean(document.querySelector("footer [contenteditable='true'][role='textbox']"));
+      Boolean(document.querySelector("footer [contenteditable='true'][role='textbox']")) ||
+      Boolean(document.querySelector("[aria-label='Buscar un chat o iniciar uno nuevo']")) ||
+      Boolean(document.querySelector("[aria-label='Search or start new chat']")) ||
+      Boolean(document.querySelector("[data-icon='new-chat-outline']")) ||
+      Boolean(document.querySelector("span[title='WhatsApp']"));
 
     if (hasChatUi) {
       return true;
