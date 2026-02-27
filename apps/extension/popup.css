@@ -179,6 +179,30 @@ button:hover {
   color: var(--muted);
 }
 
+.subscription-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.subscription-state--active {
+  color: #056b35;
+  background: #e9f9ef;
+  border-color: #bde4c8;
+}
+
+.subscription-state--inactive {
+  color: #9b1c1c;
+  background: #fdecec;
+  border-color: #f4b8b8;
+}
+
 #logout-btn {
   background: #c44b3a;
 }

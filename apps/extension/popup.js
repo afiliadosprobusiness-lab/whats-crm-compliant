@@ -124,15 +124,16 @@ const renderSession = () => {
 };
 
 const renderSubscription = () => {
+  subscriptionLabelEl.classList.remove("subscription-state--active", "subscription-state--inactive");
   if (!state.subscription) {
-    subscriptionLabelEl.textContent = "Sin datos de suscripcion.";
+    subscriptionLabelEl.textContent = "Inactivo";
+    subscriptionLabelEl.classList.add("subscription-state--inactive");
     return;
   }
 
-  const status = state.subscription.subscriptionStatus;
-  const end = new Date(state.subscription.currentPeriodEnd).toLocaleDateString();
-  const canUse = state.subscription.canUseCrm ? "Activo" : "Vencido";
-  subscriptionLabelEl.textContent = `Estado: ${status} (${canUse}) | vence: ${end} | plan: S/${state.subscription.planMonthlyPricePen}`;
+  const isActive = Boolean(state.subscription.canUseCrm);
+  subscriptionLabelEl.textContent = isActive ? "Activo" : "Inactivo";
+  subscriptionLabelEl.classList.add(isActive ? "subscription-state--active" : "subscription-state--inactive");
 };
 
 const renderStats = () => {
@@ -296,7 +297,7 @@ const bootstrapAuthenticated = async () => {
     await refreshData();
     setFeedback("Sesion activa y CRM habilitado.");
   } else {
-    setFeedback("Suscripcion vencida. Renueva para usar el CRM.", true);
+    setFeedback("Suscripcion inactiva. Solicita activacion al administrador.", true);
   }
 };
 
@@ -521,23 +522,6 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
   } finally {
     resetState();
     setFeedback("Sesion cerrada.");
-  }
-});
-
-document.getElementById("renew-btn").addEventListener("click", async () => {
-  try {
-    await apiRequest("/billing/renew", {
-      method: "POST",
-      body: JSON.stringify({ months: 1, amountPen: 50 }),
-    });
-    await refreshSubscription();
-    setCrmVisibility(Boolean(state.subscription?.canUseCrm));
-    if (state.subscription?.canUseCrm) {
-      await refreshData();
-    }
-    setFeedback("Suscripcion renovada.");
-  } catch (error) {
-    setFeedback(error.message || "Renew failed", true);
   }
 });
 

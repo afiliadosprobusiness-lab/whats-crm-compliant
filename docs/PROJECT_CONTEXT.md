@@ -56,7 +56,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
   - `background service worker` de extension para polling de recordatorios vencidos (`chrome.alarms`) y alertas nativas (`chrome.notifications`).
   - Estado de sesion.
-  - Estado y renovacion de suscripcion.
+  - Estado de suscripcion (badge Activo/Inactivo); activacion/renovacion se gestiona desde superadmin.
   - KPIs basicos.
   - Form de leads.
   - Form/lista de plantillas.
@@ -69,5 +69,6 @@ Proyecto: `whatsapp-crm-compliant`
 - Funcional para cobro mensual y operacion real.
 - En WhatsApp Web no hay auto-envio: la extension inserta mensajes y el usuario confirma envio manual.
 - Seguimientos asistidos aplican control local de limite diario para cumplimiento (20 inserciones manuales por dia).
+- Superadmin externo puede reconciliar estado real de suscripcion por lote de correos via `POST /api/v1/admin/subscriptions-by-email`.
 - Firebase Auth Google requiere activar `Get started` + provider `Google` en Firebase Console si aun no se hizo.
 - Pendiente para robustez enterprise: cola de envios, observabilidad avanzada, billing automatizado real, rotacion de claves y backups operativos.

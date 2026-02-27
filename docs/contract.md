@@ -220,6 +220,48 @@ Posibles errores:
 - `404 NOT_FOUND` si no existe usuario/workspace para ese email.
 - `503 INTERNAL_ERROR` si el servidor no tiene `ADMIN_SYNC_KEY` configurado.
 
+### `POST /api/v1/admin/subscriptions-by-email`
+
+Header requerido:
+
+- `x-admin-sync-key: <ADMIN_SYNC_KEY>`
+
+Request:
+
+```json
+{
+  "emails": ["agencia@test.com", "equipo@test.com"]
+}
+```
+
+Reglas:
+
+- Acepta `1..100` correos por request.
+- No modifica estado, solo consulta estado real de suscripcion por email.
+
+Response `200`:
+
+```json
+{
+  "results": [
+    {
+      "email": "agencia@test.com",
+      "found": true,
+      "userId": "usr_...",
+      "workspaceId": "ws_...",
+      "subscriptionStatus": "active",
+      "currentPeriodEnd": "2026-03-29T15:00:00.000Z",
+      "canUseCrm": true
+    }
+  ]
+}
+```
+
+Posibles errores:
+
+- `401 UNAUTHORIZED` si falta o no coincide `x-admin-sync-key`.
+- `503 INTERNAL_ERROR` si el servidor no tiene `ADMIN_SYNC_KEY` configurado.
+
 Response `200`:
 
 ```json
@@ -499,3 +541,8 @@ Lista de eventos recientes (debug MVP).
 - Cambio: se agrega `POST /api/v1/admin/sync-subscription` para activacion/desactivacion server-to-server desde superadmin externo
 - Tipo: non-breaking
 - Impacto: sincroniza estado comercial del superadmin con el acceso real del CRM Extension por email
+
+- Fecha: 2026-02-27
+- Cambio: se agrega `POST /api/v1/admin/subscriptions-by-email` para consultar estado real de suscripcion por lote de correos
+- Tipo: non-breaking
+- Impacto: permite reconciliar estado de superadmin con estado real de extension sin modificar suscripciones

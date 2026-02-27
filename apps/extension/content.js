@@ -18,7 +18,7 @@
   const FOLLOWUP_USAGE_RETENTION_DAYS = 45;
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
-  const CRM_BUILD_TAG = "0.4.2-2026-02-27";
+  const CRM_BUILD_TAG = "0.4.3-2026-02-27";
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const TUTORIAL_STEPS = [
     {
@@ -654,7 +654,7 @@
     if (!state.token) {
       setStatus("Inicia sesion en la extension para habilitar este modulo.", true);
     } else if (!state.canUseCrm) {
-      setStatus("Suscripcion inactiva. Renuevala para usar el CRM.", true);
+      setStatus("Suscripcion inactiva. Solicita activacion al administrador.", true);
     } else {
       setStatus(`Modulo activo: ${section}.`);
     }
@@ -682,7 +682,7 @@
     }
 
     if (!state.canUseCrm) {
-      gateEl.textContent = "Tu suscripcion CRM no esta activa. Renuevala desde la extension.";
+      gateEl.textContent = "Tu suscripcion CRM no esta activa. Solicita activacion al administrador.";
       gateEl.classList.remove("wacrm-hidden");
       toolsEl.classList.add("wacrm-hidden");
       return;

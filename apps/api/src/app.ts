@@ -123,6 +123,9 @@ export const createApp = () => {
     enabled: z.boolean(),
     months: z.number().int().min(1).max(12).optional(),
   });
+  const adminStatusBatchSchema = z.object({
+    emails: z.array(z.string().trim().email().max(180)).min(1).max(100),
+  });
   const adminRouter = Router();
   adminRouter.post(
     "/sync-subscription",
@@ -205,6 +208,74 @@ export const createApp = () => {
           canUseCrm: updated.subscriptionStatus === "active" && isInPeriod,
         },
       });
+    }),
+  );
+  adminRouter.post(
+    "/subscriptions-by-email",
+    asyncHandler(async (req, res) => {
+      if (!env.adminSyncKey) {
+        throw new AppError({
+          statusCode: 503,
+          code: "INTERNAL_ERROR",
+          message: "ADMIN_SYNC_KEY no configurado",
+        });
+      }
+
+      const syncKey = String(req.header("x-admin-sync-key") || "").trim();
+      if (!syncKey || syncKey !== env.adminSyncKey) {
+        throw new AppError({
+          statusCode: 401,
+          code: "UNAUTHORIZED",
+          message: "x-admin-sync-key invalido",
+        });
+      }
+
+      const payload = adminStatusBatchSchema.parse(req.body);
+      const nowMs = Date.now();
+      const uniqueEmails = Array.from(new Set(payload.emails.map((email) => email.toLowerCase())));
+
+      const results = await Promise.all(
+        uniqueEmails.map(async (email) => {
+          const user = await authRepository.findUserByEmail(email);
+          if (!user) {
+            return {
+              email,
+              found: false,
+              userId: null,
+              workspaceId: null,
+              subscriptionStatus: null,
+              currentPeriodEnd: null,
+              canUseCrm: false,
+            };
+          }
+
+          const workspace = await authRepository.findWorkspaceById(user.workspaceId);
+          if (!workspace) {
+            return {
+              email,
+              found: false,
+              userId: user.id,
+              workspaceId: user.workspaceId,
+              subscriptionStatus: null,
+              currentPeriodEnd: null,
+              canUseCrm: false,
+            };
+          }
+
+          const isInPeriod = new Date(workspace.currentPeriodEnd).getTime() > nowMs;
+          return {
+            email,
+            found: true,
+            userId: user.id,
+            workspaceId: workspace.id,
+            subscriptionStatus: workspace.subscriptionStatus,
+            currentPeriodEnd: workspace.currentPeriodEnd,
+            canUseCrm: workspace.subscriptionStatus === "active" && isInPeriod,
+          };
+        }),
+      );
+
+      res.status(200).json({ results });
     }),
   );
   app.use("/api/v1/admin", adminRouter);

@@ -59,6 +59,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
   - `POST /api/v1/billing/renew`
 - Admin sync:
   - `POST /api/v1/admin/sync-subscription` (header `x-admin-sync-key`)
+  - `POST /api/v1/admin/subscriptions-by-email` (header `x-admin-sync-key`)
 - Templates:
   - `POST /api/v1/templates`
   - `GET /api/v1/templates`
