@@ -30,7 +30,7 @@ export const loadEnv = (): EnvConfig => {
   return {
     port: parseIntWithFallback(process.env.PORT, 4001),
     appOrigin: process.env.APP_ORIGIN ?? "http://localhost:5173",
-    adminSyncKey: process.env.ADMIN_SYNC_KEY ?? "",
+    adminSyncKey: (process.env.ADMIN_SYNC_KEY ?? "").trim(),
     whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN ?? "",
     whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? "",
     whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? "dev_verify_token",
