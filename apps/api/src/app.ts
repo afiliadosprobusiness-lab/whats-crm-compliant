@@ -89,7 +89,16 @@ export const createApp = () => {
 
   const app = express();
   app.disable("x-powered-by");
-  app.use(helmet());
+  const helmetAny = helmet as any;
+  const helmetFactory =
+    typeof helmetAny === "function"
+      ? helmetAny
+      : typeof helmetAny?.default === "function"
+        ? helmetAny.default
+        : null;
+  if (helmetFactory) {
+    app.use(helmetFactory());
+  }
   app.use(
     cors({
       origin: (origin, callback) => {
