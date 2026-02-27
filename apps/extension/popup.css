@@ -1,0 +1,246 @@
+:root {
+  --bg: #f5f4ee;
+  --card: #ffffff;
+  --ink: #122014;
+  --muted: #49604e;
+  --brand: #0a8f3f;
+  --brand-dark: #066430;
+  --line: #dbe4d9;
+  --danger: #8f1f1f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 430px;
+  max-width: 100%;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 10% 20%, #dff1df 0, transparent 38%),
+    radial-gradient(circle at 80% 0%, #fff0ce 0, transparent 32%),
+    var(--bg);
+  color: var(--ink);
+}
+
+.app {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 6px 20px rgb(18 32 20 / 6%);
+}
+
+.card h2 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.stats .kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.kpis article {
+  border-radius: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+}
+
+.kpis span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.kpis strong {
+  font-size: 1.1rem;
+}
+
+.grid {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-subform {
+  margin-top: 8px;
+}
+
+details summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+label,
+fieldset {
+  display: grid;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  min-width: 0;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font: inherit;
+  color: var(--ink);
+  padding: 8px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+button {
+  border: none;
+  border-radius: 9px;
+  padding: 9px 12px;
+  font: inherit;
+  font-weight: 600;
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+button:hover {
+  background: var(--brand-dark);
+}
+
+.session-row {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.session-row small {
+  color: var(--muted);
+}
+
+#logout-btn {
+  background: #c44b3a;
+}
+
+#logout-btn:hover {
+  background: #963527;
+}
+
+.check-list {
+  max-height: 130px;
+  overflow: auto;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.check-list label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--ink);
+}
+
+.list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.list li {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px;
+  font-size: 0.78rem;
+}
+
+.pipeline {
+  display: grid;
+  gap: 8px;
+}
+
+.pipeline-col {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.pipeline-col h3 {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.pill {
+  background: #f4faf4;
+  border: 1px solid #cce6d0;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+}
+
+#feedback {
+  margin: 0;
+  min-height: 20px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+#feedback.error {
+  color: var(--danger);
+}
+
+.is-hidden {
+  display: none;
+}

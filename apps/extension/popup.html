@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp CRM</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <p class="eyebrow">CRM ligero</p>
+        <h1>WhatsApp Sales Desk</h1>
+        <p class="subtitle">Leads, plantillas, campañas y recordatorios en un solo panel.</p>
+      </header>
+
+      <section class="card">
+        <h2>Acceso</h2>
+        <form id="login-form" class="grid">
+          <label>
+            Email
+            <input name="email" type="email" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" required minlength="6" />
+          </label>
+          <button type="submit">Iniciar sesión</button>
+        </form>
+        <details>
+          <summary>Crear cuenta owner</summary>
+          <form id="register-form" class="grid auth-subform">
+            <label>
+              Empresa
+              <input name="companyName" required />
+            </label>
+            <label>
+              Nombre
+              <input name="name" required />
+            </label>
+            <label>
+              Email
+              <input name="email" type="email" required />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" required minlength="6" />
+            </label>
+            <button type="submit">Crear cuenta</button>
+          </form>
+        </details>
+        <div class="session-row">
+          <small id="session-label">Sin sesión</small>
+          <button id="logout-btn" type="button">Cerrar sesión</button>
+        </div>
+      </section>
+
+      <section class="card" data-crm>
+        <h2>Suscripción</h2>
+        <p id="subscription-status">Sin datos.</p>
+        <button id="renew-btn" type="button">Renovar 1 mes (S/50)</button>
+      </section>
+
+      <section class="card stats" data-crm>
+        <h2>Resumen</h2>
+        <div class="kpis">
+          <article>
+            <span>Leads</span>
+            <strong id="kpi-leads">0</strong>
+          </article>
+          <article>
+            <span>Opt-in</span>
+            <strong id="kpi-optin">0</strong>
+          </article>
+          <article>
+            <span>Campañas</span>
+            <strong id="kpi-campaigns">0</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="card" data-crm>
+        <h2>Nuevo Lead</h2>
+        <form id="lead-form" class="grid">
+          <label>
+            Nombre
+            <input name="name" required minlength="2" maxlength="120" />
+          </label>
+          <label>
+            Teléfono E.164
+            <input name="phoneE164" required placeholder="+51999999999" />
+          </label>
+          <label>
+            Consentimiento
+            <select name="consentStatus" required>
+              <option value="opted_in">opted_in</option>
+              <option value="pending">pending</option>
+              <option value="opted_out">opted_out</option>
+            </select>
+          </label>
+          <label>
+            Etapa
+            <select name="stage" required>
+              <option value="new">new</option>
+              <option value="contacted">contacted</option>
+              <option value="qualified">qualified</option>
+              <option value="won">won</option>
+              <option value="lost">lost</option>
+            </select>
+          </label>
+          <label>
+            Fuente consentimiento
+            <input name="consentSource" required value="form_web" />
+          </label>
+          <label>
+            Tags (coma)
+            <input name="tags" placeholder="nuevo, lima, premium" />
+          </label>
+          <button type="submit">Guardar lead</button>
+        </form>
+      </section>
+
+      <section class="card" data-crm>
+        <h2>Plantillas</h2>
+        <form id="template-form" class="grid">
+          <label>
+            Nombre
+            <input name="name" required />
+          </label>
+          <label>
+            Mensaje
+            <textarea name="body" rows="3" required placeholder="Hola {{name}}, ..."></textarea>
+          </label>
+          <button type="submit">Guardar plantilla</button>
+        </form>
+        <ul id="template-list" class="list"></ul>
+      </section>
+
+      <section class="card" data-crm>
+        <h2>Campaña Masiva</h2>
+        <form id="campaign-form" class="grid">
+          <label>
+            Nombre campaña
+            <input name="name" required placeholder="Promo Marzo" />
+          </label>
+          <label>
+            Plantilla
+            <select id="campaign-template-id" name="templateId" required></select>
+          </label>
+          <fieldset>
+            <legend>Destinatarios (solo opted_in)</legend>
+            <div id="campaign-recipients" class="check-list"></div>
+          </fieldset>
+          <button type="submit">Crear y enviar</button>
+        </form>
+      </section>
+
+      <section class="card" data-crm>
+        <h2>Recordatorios</h2>
+        <form id="reminder-form" class="grid">
+          <label>
+            Lead
+            <select id="reminder-lead-id" name="leadId" required></select>
+          </label>
+          <label>
+            Nota
+            <input name="note" required maxlength="200" />
+          </label>
+          <label>
+            Fecha/Hora
+            <input name="dueAt" type="datetime-local" required />
+          </label>
+          <button type="submit">Crear recordatorio</button>
+        </form>
+        <ul id="reminder-list" class="list"></ul>
+      </section>
+
+      <section class="card" data-crm>
+        <h2>Embudo</h2>
+        <div id="pipeline" class="pipeline"></div>
+      </section>
+
+      <p id="feedback" role="status" aria-live="polite"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
