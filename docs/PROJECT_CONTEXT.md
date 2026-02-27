@@ -35,6 +35,7 @@ Proyecto: `whatsapp-crm-compliant`
    - Bloqueo para leads sin `opted_in`.
 6. Recordatorios:
    - Creacion por lead con fecha/hora.
+   - Notificacion de escritorio en Chrome cuando el recordatorio vence (sin auto-envio).
 7. Webhooks:
    - Verificacion y recepcion de eventos de WhatsApp.
 8. Infra:
@@ -50,7 +51,9 @@ Proyecto: `whatsapp-crm-compliant`
   - Login con Google (OAuth extension + Firebase Auth).
   - Panel embebido en `web.whatsapp.com` via content script (lead rapido, notas, recordatorios, insertar plantilla).
   - Panel embebido con flujo inmobiliario: etiquetas sugeridas, atajos de pipeline, ficha de perfil y seguimiento rapido por horas.
+  - Seguimiento manual asistido en panel embebido con limite diario local de cumplimiento (`20/dia`), siempre con envio manual.
   - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
+  - `background service worker` de extension para polling de recordatorios vencidos (`chrome.alarms`) y alertas nativas (`chrome.notifications`).
   - Estado de sesion.
   - Estado y renovacion de suscripcion.
   - KPIs basicos.
@@ -64,5 +67,6 @@ Proyecto: `whatsapp-crm-compliant`
 
 - Funcional para cobro mensual y operacion real.
 - En WhatsApp Web no hay auto-envio: la extension inserta mensajes y el usuario confirma envio manual.
+- Seguimientos asistidos aplican control local de limite diario para cumplimiento (20 inserciones manuales por dia).
 - Firebase Auth Google requiere activar `Get started` + provider `Google` en Firebase Console si aun no se hizo.
 - Pendiente para robustez enterprise: cola de envios, observabilidad avanzada, billing automatizado real, rotacion de claves y backups operativos.

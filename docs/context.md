@@ -19,9 +19,11 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - ficha de lead (operacion, tipo de propiedad, zona, presupuesto, fuente, urgencia)
     - etiquetas sugeridas + atajos de etapa
     - recordatorio rapido de seguimiento en horas
+    - seguimiento manual asistido con limite diario de cumplimiento (`20/dia`, solo inserta texto)
     - tablero de "leads calientes hoy" con acceso rapido a ficha
     - tutorial guiado con checklist persistente (storage local de extension)
     - dock lateral + tabs para navegar modulos del panel
+  - Incluye `background service worker` para revisar recordatorios vencidos y emitir notificaciones de escritorio (sin auto-envio).
 - Persistencia actual: Firestore (colecciones por modulo).
 - Runtime de despliegue: Vercel Serverless (`apps/api/src/vercel.ts` + `vercel.json`).
 
@@ -101,6 +103,8 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Throttling basico por minuto para campanas.
 - Limite diario por workspace para campanas (`MAX_CAMPAIGN_MESSAGES_PER_DAY`).
 - El panel en WhatsApp Web solo inserta texto en composer; el envio final queda manual por el usuario.
+- Recordatorios vencidos disparan notificacion local en Chrome (polling por `chrome.alarms`), con deduplicacion local para evitar alertas repetidas.
+- Seguimientos asistidos desde panel embebido mantienen limite diario local (`20`) y no ejecutan envio automatico.
 - CORS restringido por `APP_ORIGIN`.
 - Requests desde `chrome-extension://*` estan permitidos para uso de extension local (load unpacked).
 - Requests desde `https://web.whatsapp.com` estan permitidos para el panel embebido (content script).

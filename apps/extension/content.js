@@ -11,10 +11,14 @@
     "crm_google_client_id",
     "crm_firebase_web_api_key",
     "crm_tutorial_progress_v1",
+    "crm_followup_usage_v1",
   ];
+  const FOLLOWUP_USAGE_KEY = "crm_followup_usage_v1";
+  const FOLLOWUP_DAILY_LIMIT = 20;
+  const FOLLOWUP_USAGE_RETENTION_DAYS = 45;
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
-  const CRM_BUILD_TAG = "0.4.1-2026-02-27";
+  const CRM_BUILD_TAG = "0.4.2-2026-02-27";
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const TUTORIAL_STEPS = [
     {
@@ -123,6 +127,7 @@
     canUseCrm: false,
     templates: [],
     leads: [],
+    reminders: [],
     currentLead: null,
     currentChat: null,
     activeSection: "overview",
@@ -286,6 +291,57 @@
       date.getMonth() === now.getMonth() &&
       date.getDate() === now.getDate()
     );
+  };
+
+  const getLocalDayKey = (date = new Date()) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const normalizeFollowupUsage = (value) => {
+    const now = Date.now();
+    const maxAgeMs = FOLLOWUP_USAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    if (!value || typeof value !== "object") {
+      return {};
+    }
+
+    const normalized = {};
+    Object.entries(value).forEach(([dayKey, rawCount]) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) {
+        return;
+      }
+      const dayTime = new Date(`${dayKey}T00:00:00`).getTime();
+      if (Number.isNaN(dayTime) || Math.abs(now - dayTime) > maxAgeMs) {
+        return;
+      }
+      const count = Number.parseInt(String(rawCount), 10);
+      if (!Number.isNaN(count) && count > 0) {
+        normalized[dayKey] = Math.min(500, count);
+      }
+    });
+    return normalized;
+  };
+
+  const readFollowupUsage = async () => {
+    const values = await storageGet([FOLLOWUP_USAGE_KEY]);
+    return normalizeFollowupUsage(values[FOLLOWUP_USAGE_KEY]);
+  };
+
+  const getTodayFollowupCount = async () => {
+    const usage = await readFollowupUsage();
+    const todayKey = getLocalDayKey();
+    return Number(usage[todayKey] || 0);
+  };
+
+  const incrementTodayFollowupCount = async () => {
+    const usage = await readFollowupUsage();
+    const todayKey = getLocalDayKey();
+    const nextCount = Number(usage[todayKey] || 0) + 1;
+    usage[todayKey] = nextCount;
+    await storageSet({ [FOLLOWUP_USAGE_KEY]: usage });
+    return nextCount;
   };
 
   const getLeadHeatScore = (lead) => {
@@ -646,9 +702,13 @@
       state.nodes.noteBtn.disabled = true;
       state.nodes.stageBtn.disabled = true;
       state.nodes.reminderBtn.disabled = true;
+      if (state.nodes.insertFollowupBtn) {
+        state.nodes.insertFollowupBtn.disabled = true;
+      }
       if (state.nodes.quickFollowupBtn) {
         state.nodes.quickFollowupBtn.disabled = true;
       }
+      void refreshFollowupMeta();
       return;
     }
 
@@ -659,9 +719,13 @@
     state.nodes.noteBtn.disabled = false;
     state.nodes.stageBtn.disabled = false;
     state.nodes.reminderBtn.disabled = false;
+    if (state.nodes.insertFollowupBtn) {
+      state.nodes.insertFollowupBtn.disabled = false;
+    }
     if (state.nodes.quickFollowupBtn) {
       state.nodes.quickFollowupBtn.disabled = false;
     }
+    void refreshFollowupMeta();
   };
 
   const syncLeadWithPhone = () => {
@@ -786,6 +850,7 @@
       state.canUseCrm = false;
       state.templates = [];
       state.leads = [];
+      state.reminders = [];
       state.currentLead = null;
       renderTemplates();
       fillProfileForm(null);
@@ -793,6 +858,7 @@
       setModeState();
       updateLeadMeta();
       updatePipelineMeta();
+      await refreshFollowupMeta();
       return;
     }
 
@@ -805,28 +871,114 @@
     if (!state.canUseCrm) {
       state.templates = [];
       state.leads = [];
+      state.reminders = [];
       state.currentLead = null;
       renderTemplates();
       renderHotLeads();
       updateLeadMeta();
       updatePipelineMeta();
       setModeState();
+      await refreshFollowupMeta();
       setStatus("Sesion activa, pero suscripcion inactiva.", true);
       return;
     }
 
-    const [templatesData, leadsData] = await Promise.all([
+    const [templatesData, leadsData, remindersData] = await Promise.all([
       apiRequest("/templates"),
       apiRequest("/leads"),
+      apiRequest("/reminders"),
     ]);
     state.templates = templatesData.templates || [];
     state.leads = leadsData.leads || [];
+    state.reminders = remindersData.reminders || [];
     renderTemplates();
     updatePipelineMeta();
     renderHotLeads();
     syncLeadWithPhone();
+    await refreshFollowupMeta();
     setModeState();
     setStatus(`CRM inmobiliario activo para ${state.me?.email || "workspace actual"}.`);
+  };
+
+  const insertMessageIntoComposer = (message) => {
+    const composer = getComposerEl();
+    if (!composer) {
+      setStatus("No se encontro el cuadro de mensaje en WhatsApp Web.", true);
+      return false;
+    }
+
+    composer.focus();
+    composer.textContent = message;
+    composer.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: message }));
+    return true;
+  };
+
+  const getNextDueReminderForLead = (leadId) => {
+    const now = Date.now();
+    const reminders = Array.isArray(state.reminders) ? state.reminders : [];
+    const candidates = reminders
+      .filter((reminder) => reminder && reminder.leadId === leadId && reminder.status !== "done")
+      .filter((reminder) => {
+        const dueTime = new Date(reminder.dueAt || "").getTime();
+        return !Number.isNaN(dueTime) && dueTime <= now;
+      })
+      .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+    return candidates[0] || null;
+  };
+
+  const buildManualFollowupMessage = (lead, reminder) => {
+    const contactName = String(lead?.name || state.currentChat?.name || "cliente").trim();
+    const reminderText = String(reminder?.note || "").trim();
+    const intro = reminderText
+      ? `te escribo para ${reminderText.toLowerCase()}.`
+      : "te escribo para dar seguimiento a tu consulta.";
+    return `Hola ${contactName}, ${intro} ¿Te viene bien continuar hoy por este medio?`;
+  };
+
+  const refreshFollowupMeta = async () => {
+    const followupMetaEl = state.nodes.followupMetaEl;
+    if (!followupMetaEl) {
+      return;
+    }
+    const count = await getTodayFollowupCount();
+    followupMetaEl.textContent = `Seguimientos manuales hoy: ${count}/${FOLLOWUP_DAILY_LIMIT}.`;
+    if (state.nodes.insertFollowupBtn) {
+      state.nodes.insertFollowupBtn.disabled = !state.currentLead || count >= FOLLOWUP_DAILY_LIMIT;
+    }
+  };
+
+  const insertManualFollowup = async () => {
+    const lead = await ensureCurrentLead();
+    const todayCount = await getTodayFollowupCount();
+    if (todayCount >= FOLLOWUP_DAILY_LIMIT) {
+      setStatus(`Limite diario alcanzado (${FOLLOWUP_DAILY_LIMIT}). Vuelve a intentar manana.`, true);
+      await refreshFollowupMeta();
+      return;
+    }
+
+    const reminder = getNextDueReminderForLead(lead.id);
+    const message = buildManualFollowupMessage(lead, reminder);
+    const inserted = insertMessageIntoComposer(message);
+    if (!inserted) {
+      return;
+    }
+
+    const nextCount = await incrementTodayFollowupCount();
+    void markTutorialStep("create_followup");
+    const reminderNote = reminder?.note ? ` | recordatorio: ${String(reminder.note).slice(0, 180)}` : "";
+    try {
+      await apiRequest(`/leads/${lead.id}/notes`, {
+        method: "POST",
+        body: JSON.stringify({
+          note: `Seguimiento manual insertado en WhatsApp (${nextCount}/${FOLLOWUP_DAILY_LIMIT})${reminderNote}`.slice(0, 500),
+        }),
+      });
+    } catch (_error) {
+      // Keep manual flow resilient even if note logging fails.
+    }
+
+    await refreshFollowupMeta();
+    setStatus(`Seguimiento insertado. Revisa y envia manualmente (${nextCount}/${FOLLOWUP_DAILY_LIMIT} hoy).`);
   };
 
   const insertTemplateIntoComposer = () => {
@@ -837,18 +989,13 @@
       return;
     }
 
-    const composer = getComposerEl();
-    if (!composer) {
-      setStatus("No se encontro el cuadro de mensaje en WhatsApp Web.", true);
+    const contactName = state.nodes.nameInput?.value?.trim() || state.currentChat?.name || "cliente";
+    const message = String(template.body || "").replace(/\{\{\s*name\s*\}\}/gi, contactName);
+    const inserted = insertMessageIntoComposer(message);
+    if (!inserted) {
       return;
     }
 
-    const contactName = state.nodes.nameInput?.value?.trim() || state.currentChat?.name || "cliente";
-    const message = String(template.body || "").replace(/\{\{\s*name\s*\}\}/gi, contactName);
-
-    composer.focus();
-    composer.textContent = message;
-    composer.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: message }));
     void markTutorialStep("insert_template");
     setStatus("Plantilla insertada. Revisa y envia manualmente.");
   };
@@ -972,6 +1119,7 @@
     state.nodes.reminderNoteInput.value = "";
     void markTutorialStep("create_followup");
     setStatus("Recordatorio creado.");
+    await fetchWorkspaceData();
   };
 
   const createQuickFollowup = async () => {
@@ -993,6 +1141,7 @@
     });
     void markTutorialStep("create_followup");
     setStatus("Seguimiento rapido creado.");
+    await fetchWorkspaceData();
   };
 
   const withSyncGuard = async (task) => {
@@ -1147,6 +1296,9 @@
                 <select class="wacrm-select" id="wacrm-template"></select>
               </label>
               <button type="button" class="wacrm-btn secondary" id="wacrm-insert-template">Insertar en caja de mensaje</button>
+              <button type="button" class="wacrm-btn ghost" id="wacrm-insert-followup">Insertar seguimiento manual</button>
+              <p class="wacrm-meta" id="wacrm-followup-meta">Seguimientos manuales hoy: 0/${FOLLOWUP_DAILY_LIMIT}.</p>
+              <p class="wacrm-meta">Limite diario de seguimiento manual para cumplimiento: ${FOLLOWUP_DAILY_LIMIT}.</p>
               <p class="wacrm-meta">No envia automaticamente. Solo inserta texto para envio manual.</p>
             </div>
             <div class="wacrm-block" data-section="actions">
@@ -1208,6 +1360,8 @@
     state.nodes.urgencySelect = root.querySelector("#wacrm-urgency");
     state.nodes.leadMetaEl = root.querySelector("#wacrm-lead-meta");
     state.nodes.templateSelect = root.querySelector("#wacrm-template");
+    state.nodes.insertFollowupBtn = root.querySelector("#wacrm-insert-followup");
+    state.nodes.followupMetaEl = root.querySelector("#wacrm-followup-meta");
     state.nodes.noteInput = root.querySelector("#wacrm-note");
     state.nodes.reminderDateInput = root.querySelector("#wacrm-reminder-date");
     state.nodes.reminderNoteInput = root.querySelector("#wacrm-reminder-note");
@@ -1261,6 +1415,9 @@
     root.querySelector("#wacrm-insert-template").addEventListener("click", () => {
       insertTemplateIntoComposer();
     });
+    root.querySelector("#wacrm-insert-followup").addEventListener("click", () => {
+      void withSyncGuard(insertManualFollowup);
+    });
     root.querySelector("#wacrm-save-note").addEventListener("click", () => {
       void withSyncGuard(addLeadNote);
     });
@@ -1277,6 +1434,7 @@
     state.nodes.phoneInput.addEventListener("input", () => {
       syncLeadWithPhone();
     });
+    void refreshFollowupMeta();
     setActiveSection(state.activeSection);
   };
 
