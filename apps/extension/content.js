@@ -183,6 +183,18 @@
     return raw.toLowerCase().includes("extension context invalidated");
   };
 
+  window.addEventListener("unhandledrejection", (event) => {
+    if (isInvalidatedContextError(event?.reason)) {
+      event.preventDefault();
+    }
+  });
+
+  window.addEventListener("error", (event) => {
+    if (isInvalidatedContextError(event?.error || event?.message)) {
+      event.preventDefault();
+    }
+  });
+
   const storageGet = async (keys) => {
     if (!hasChromeStorage || !isExtensionContextAlive()) {
       return {};
@@ -2549,5 +2561,10 @@
     startWatchers();
   };
 
-  void init();
+  void init().catch((error) => {
+    if (isInvalidatedContextError(error)) {
+      return;
+    }
+    console.warn("[WACRM] init failed:", error?.message || error);
+  });
 })();
