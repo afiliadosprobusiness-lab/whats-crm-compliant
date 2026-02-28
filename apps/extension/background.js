@@ -162,7 +162,7 @@ const checkDueReminders = async () => {
       await createNotification(notificationId, {
         type: "basic",
         iconUrl: "icon.png",
-        title: "Recordatorio CRM WhatsApp",
+        title: "Recordatorio WhatsWidget",
         message: `${leadName}: ${note}`,
         contextMessage: `Vencido: ${dueAtLabel}`,
         priority: 2,

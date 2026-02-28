@@ -18,7 +18,7 @@
   const FOLLOWUP_USAGE_RETENTION_DAYS = 45;
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
-  const CRM_BUILD_TAG = "0.4.4-2026-02-27";
+  const CRM_BUILD_TAG = "0.4.5-2026-02-28";
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const TUTORIAL_STEPS = [
     {
@@ -668,7 +668,7 @@
     }
 
     if (!getWhatsAppLoggedIn()) {
-      gateEl.textContent = "Inicia sesion en WhatsApp Web para habilitar el CRM.";
+      gateEl.textContent = "Inicia sesion en WhatsApp Web para habilitar WhatsWidget.";
       gateEl.classList.remove("wacrm-hidden");
       toolsEl.classList.add("wacrm-hidden");
       return;
@@ -1197,7 +1197,7 @@
     root.innerHTML = `
       <div class="wacrm-card">
         <div class="wacrm-header">
-          <span class="wacrm-title">CRM WhatsApp ${CRM_BUILD_TAG}</span>
+          <span class="wacrm-title">WhatsWidget ${CRM_BUILD_TAG}</span>
           <button type="button" class="wacrm-minify" id="wacrm-toggle">Minimizar</button>
         </div>
         <div class="wacrm-body" id="wacrm-body">

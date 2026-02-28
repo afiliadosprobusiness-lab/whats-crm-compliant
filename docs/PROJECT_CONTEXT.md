@@ -46,6 +46,7 @@ Proyecto: `whatsapp-crm-compliant`
 ## Frontend de Extension
 
 - Popup unico con:
+  - Marca de extension: `WhatsWidget` (by LeadWidget), con icono de LeadWidget en `apps/extension/icon.png`.
   - Configuracion bloqueada a backend productivo (`https://whats-crm-compliant.vercel.app/api/v1`) para evitar errores por edicion manual.
   - Login/registro owner.
   - Panel embebido en `web.whatsapp.com` via content script (lead rapido, notas, recordatorios, insertar plantilla).
