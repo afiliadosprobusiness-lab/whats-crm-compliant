@@ -186,14 +186,7 @@
     nodes: {},
   };
 
-  const isExtensionContextAlive = () => {
-    const chromeApi = getChromeApi();
-    try {
-      return Boolean(chromeApi?.runtime?.id);
-    } catch (_error) {
-      return false;
-    }
-  };
+  const isExtensionContextAlive = () => true;
 
   const isInvalidatedContextError = (errorOrMessage) => {
     const raw = typeof errorOrMessage === "string"
@@ -224,7 +217,7 @@
       try {
         chromeApi?.storage?.local?.get?.(keys, (result) => {
           try {
-            if (chromeApi?.runtime?.lastError) {
+            if (!chromeApi) {
               resolve({});
               return;
             }
@@ -2461,9 +2454,6 @@
     if (hasChromeStorage() && isExtensionContextAlive() && chromeApi?.storage?.onChanged) {
       try {
         chromeApi.storage.onChanged.addListener((changes, areaName) => {
-          if (chromeApi?.runtime?.lastError) {
-            return;
-          }
           if (areaName !== "local") {
             return;
           }
