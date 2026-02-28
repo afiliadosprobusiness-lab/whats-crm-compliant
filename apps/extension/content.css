@@ -30,6 +30,9 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
 }
 
 .wacrm-title {
@@ -46,6 +49,11 @@
   padding: 2px 8px;
   font-size: 11px;
   cursor: pointer;
+}
+
+.wacrm-card.wacrm-dragging,
+.wacrm-card.wacrm-dragging * {
+  user-select: none !important;
 }
 
 .wacrm-body {

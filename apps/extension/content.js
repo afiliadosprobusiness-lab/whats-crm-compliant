@@ -12,14 +12,16 @@
     "crm_firebase_web_api_key",
     "crm_tutorial_progress_v1",
     "crm_followup_usage_v1",
+    "crm_panel_position_v1",
   ];
   const FOLLOWUP_USAGE_KEY = "crm_followup_usage_v1";
   const FOLLOWUP_DAILY_LIMIT = 20;
   const FOLLOWUP_USAGE_RETENTION_DAYS = 45;
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
-  const CRM_BUILD_TAG = "0.4.6-2026-02-28";
+  const CRM_BUILD_TAG = "0.4.7-2026-02-28";
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
+  const PANEL_POSITION_KEY = "crm_panel_position_v1";
   const TUTORIAL_STEPS = [
     {
       id: "open_chat",
@@ -136,6 +138,7 @@
     syncing: false,
     syncTimer: null,
     tutorialProgress: {},
+    panelPosition: null,
     nodes: {},
   };
 
@@ -208,6 +211,110 @@
       option.value = item.value;
       option.textContent = item.label;
       selectEl.appendChild(option);
+    });
+  };
+
+  const normalizePanelPosition = (raw) => {
+    if (!raw || typeof raw !== "object") {
+      return null;
+    }
+    const left = Number(raw.left);
+    const top = Number(raw.top);
+    if (!Number.isFinite(left) || !Number.isFinite(top)) {
+      return null;
+    }
+    return { left, top };
+  };
+
+  const clampPanelPosition = (left, top) => {
+    const root = state.nodes.root;
+    const margin = 8;
+    const width = Math.round(root?.getBoundingClientRect?.().width || 368);
+    const height = Math.round(root?.getBoundingClientRect?.().height || 120);
+    const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+    const maxTop = Math.max(margin, window.innerHeight - height - margin);
+    return {
+      left: Math.min(Math.max(Math.round(left), margin), maxLeft),
+      top: Math.min(Math.max(Math.round(top), margin), maxTop),
+    };
+  };
+
+  const applyPanelPosition = (left, top) => {
+    const root = state.nodes.root;
+    if (!root) {
+      return;
+    }
+    const next = clampPanelPosition(left, top);
+    root.style.left = `${next.left}px`;
+    root.style.top = `${next.top}px`;
+    root.style.right = "auto";
+    root.style.bottom = "auto";
+  };
+
+  const persistPanelPosition = async () => {
+    await storageSet({ [PANEL_POSITION_KEY]: state.panelPosition });
+  };
+
+  const clearPanelPosition = async () => {
+    state.panelPosition = null;
+    await storageSet({ [PANEL_POSITION_KEY]: null });
+  };
+
+  const enablePanelDragging = (root) => {
+    const header = root.querySelector(".wacrm-header");
+    if (!(header instanceof HTMLElement)) {
+      return;
+    }
+
+    let dragState = null;
+
+    const onMouseMove = (event) => {
+      if (!dragState) {
+        return;
+      }
+      const left = event.clientX - dragState.offsetX;
+      const top = event.clientY - dragState.offsetY;
+      state.panelPosition = clampPanelPosition(left, top);
+      applyPanelPosition(state.panelPosition.left, state.panelPosition.top);
+    };
+
+    const onMouseUp = async () => {
+      if (!dragState) {
+        return;
+      }
+      dragState = null;
+      root.querySelector(".wacrm-card")?.classList.remove("wacrm-dragging");
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      await persistPanelPosition();
+    };
+
+    header.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      if (event.target instanceof Element && event.target.closest("button")) {
+        return;
+      }
+
+      const panelRect = root.getBoundingClientRect();
+      dragState = {
+        offsetX: event.clientX - panelRect.left,
+        offsetY: event.clientY - panelRect.top,
+      };
+      root.querySelector(".wacrm-card")?.classList.add("wacrm-dragging");
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+      event.preventDefault();
+    });
+
+    header.addEventListener("dblclick", (event) => {
+      if (event.target instanceof Element && event.target.closest("button")) {
+        return;
+      }
+      void clearPanelPosition().then(() => {
+        positionPanel();
+      });
     });
   };
 
@@ -657,6 +764,42 @@
       setStatus("Suscripcion inactiva. Solicita activacion al administrador.", true);
     } else {
       setStatus(`Modulo activo: ${section}.`);
+    }
+  };
+
+  const runDockAction = (action) => {
+    if (action === "overview") {
+      openSectionFromMenu("overview");
+      state.nodes.hotLeadsEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      return;
+    }
+    if (action === "tutorial") {
+      openSectionFromMenu("tutorial");
+      return;
+    }
+    if (action === "all") {
+      openSectionFromMenu("all");
+      return;
+    }
+    if (action === "save-lead") {
+      openSectionFromMenu("lead");
+      if (getWhatsAppLoggedIn() && state.token && state.canUseCrm) {
+        void withSyncGuard(saveLead);
+      }
+      return;
+    }
+    if (action === "insert-template") {
+      openSectionFromMenu("actions");
+      if (getWhatsAppLoggedIn() && state.token && state.canUseCrm) {
+        insertTemplateIntoComposer();
+      }
+      return;
+    }
+    if (action === "quick-followup") {
+      openSectionFromMenu("actions");
+      if (getWhatsAppLoggedIn() && state.token && state.canUseCrm) {
+        void withSyncGuard(createQuickFollowup);
+      }
     }
   };
 
@@ -1165,11 +1308,12 @@
     dock.innerHTML = `
       <button type="button" class="wacrm-dock-toggle" id="wacrm-dock-toggle" title="Abrir menu CRM">CRM</button>
       <div class="wacrm-dock-menu" id="wacrm-dock-menu">
-        <button type="button" class="wacrm-dock-item active" data-section="overview" title="Inicio">H</button>
-        <button type="button" class="wacrm-dock-item" data-section="lead" title="Leads">L</button>
-        <button type="button" class="wacrm-dock-item" data-section="actions" title="Acciones">A</button>
-        <button type="button" class="wacrm-dock-item" data-section="tutorial" title="Tutorial">T</button>
-        <button type="button" class="wacrm-dock-item" data-section="all" title="Todo">+</button>
+        <button type="button" class="wacrm-dock-item active" data-action="overview" data-section="overview" title="Inicio y leads calientes">H</button>
+        <button type="button" class="wacrm-dock-item" data-action="save-lead" data-section="lead" title="Guardar lead del chat actual">L</button>
+        <button type="button" class="wacrm-dock-item" data-action="insert-template" data-section="actions" title="Insertar plantilla seleccionada">A</button>
+        <button type="button" class="wacrm-dock-item" data-action="quick-followup" data-section="actions" title="Crear seguimiento rapido (24h)">S</button>
+        <button type="button" class="wacrm-dock-item" data-action="tutorial" data-section="tutorial" title="Tutorial">T</button>
+        <button type="button" class="wacrm-dock-item" data-action="all" data-section="all" title="Ver todo el panel">+</button>
       </div>
     `;
     document.body.appendChild(dock);
@@ -1177,14 +1321,14 @@
     state.nodes.dock = dock;
     state.nodes.dockMenu = dock.querySelector("#wacrm-dock-menu");
     state.nodes.dockToggle = dock.querySelector("#wacrm-dock-toggle");
-    state.nodes.dockButtons = Array.from(dock.querySelectorAll("[data-section]"));
+    state.nodes.dockButtons = Array.from(dock.querySelectorAll("[data-action]"));
     state.nodes.dockToggle?.addEventListener("click", () => {
       state.dockOpen = !state.dockOpen;
       state.nodes.dock?.classList.toggle("open", state.dockOpen);
     });
     state.nodes.dockButtons.forEach((button) => {
       button.addEventListener("click", () => {
-        openSectionFromMenu(button.dataset.section || "overview");
+        runDockAction(button.dataset.action || "overview");
         state.dockOpen = false;
         state.nodes.dock?.classList.remove("open");
       });
@@ -1434,6 +1578,7 @@
     state.nodes.phoneInput.addEventListener("input", () => {
       syncLeadWithPhone();
     });
+    enablePanelDragging(root);
     void refreshFollowupMeta();
     setActiveSection(state.activeSection);
   };
@@ -1443,6 +1588,7 @@
     state.apiBaseUrl = String(values.crm_api_base_url || "").trim() || DEFAULT_API_BASE_URL;
     state.token = String(values.crm_token || "").trim();
     state.tutorialProgress = normalizeTutorialProgress(values[TUTORIAL_PROGRESS_KEY]);
+    state.panelPosition = normalizePanelPosition(values[PANEL_POSITION_KEY]);
     renderTutorial();
   };
 
@@ -1461,6 +1607,10 @@
         if (changes.crm_token) {
           state.token = String(changes.crm_token.newValue || "").trim();
           mustReload = true;
+        }
+        if (changes[PANEL_POSITION_KEY]) {
+          state.panelPosition = normalizePanelPosition(changes[PANEL_POSITION_KEY].newValue);
+          positionPanel();
         }
 
         if (mustReload) {
@@ -1484,8 +1634,15 @@
       return;
     }
 
+    if (state.panelPosition) {
+      applyPanelPosition(state.panelPosition.left, state.panelPosition.top);
+      return;
+    }
+
     const isMobile = window.matchMedia("(max-width: 768px)").matches;
     if (isMobile) {
+      root.style.left = "auto";
+      root.style.right = "8px";
       root.style.top = "8px";
       root.style.bottom = "auto";
       return;
@@ -1496,12 +1653,20 @@
       document.querySelector("[data-testid='conversation-header']") ||
       document.querySelector("header");
 
+    const panelRect = root.getBoundingClientRect();
+    const panelWidth = Math.round(panelRect.width || 368);
     const fallbackTop = 72;
-    const headerTop = contactHeader instanceof HTMLElement ? Math.round(contactHeader.getBoundingClientRect().top + 8) : fallbackTop;
-    const computedTop = Number.isFinite(headerTop) ? Math.max(8, headerTop) : fallbackTop;
+    const fallbackLeft = Math.max(8, window.innerWidth - panelWidth - 16);
 
-    root.style.top = `${computedTop}px`;
-    root.style.bottom = "auto";
+    if (!(contactHeader instanceof HTMLElement)) {
+      applyPanelPosition(fallbackLeft, fallbackTop);
+      return;
+    }
+
+    const headerRect = contactHeader.getBoundingClientRect();
+    const centeredLeft = Math.round(headerRect.left + (headerRect.width - panelWidth) / 2);
+    const topBelowHeader = Math.round(headerRect.bottom + 10);
+    applyPanelPosition(centeredLeft, topBelowHeader);
   };
 
   const init = async () => {

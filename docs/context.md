@@ -25,7 +25,8 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - seguimiento manual asistido con limite diario de cumplimiento (`20/dia`, solo inserta texto)
     - tablero de "leads calientes hoy" con acceso rapido a ficha
     - tutorial guiado con checklist persistente (storage local de extension)
-    - dock lateral + tabs para navegar modulos del panel
+    - dock lateral + tabs para navegar modulos del panel, con atajos operativos (guardar lead, insertar plantilla, seguimiento rapido)
+    - panel arrastrable por la barra superior; doble clic para resetear posicion automatica
   - Incluye `background service worker` para revisar recordatorios vencidos y emitir notificaciones de escritorio (sin auto-envio).
 - Persistencia actual: Firestore (colecciones por modulo).
 - Runtime de despliegue: Vercel Serverless (`apps/api/src/vercel.ts` + `vercel.json`).

@@ -53,6 +53,8 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido con flujo inmobiliario: etiquetas sugeridas, atajos de pipeline, ficha de perfil y seguimiento rapido por horas.
   - Seguimiento manual asistido en panel embebido con limite diario local de cumplimiento (`20/dia`), siempre con envio manual.
   - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
+  - Dock lateral con atajos operativos: guardar lead rapido, insertar plantilla y crear seguimiento rapido.
+  - Panel embebido arrastrable; doble clic en la barra superior reinicia posicion automatica.
   - `background service worker` de extension para polling de recordatorios vencidos (`chrome.alarms`) y alertas nativas (`chrome.notifications`).
   - Estado de sesion.
   - Estado de suscripcion (badge Activo/Inactivo); activacion/renovacion se gestiona desde superadmin.
