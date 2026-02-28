@@ -35,6 +35,12 @@
   touch-action: none;
 }
 
+.wacrm-header-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .wacrm-title {
   font-size: 12px;
   font-weight: 650;
@@ -49,6 +55,17 @@
   padding: 2px 8px;
   font-size: 11px;
   cursor: pointer;
+}
+
+html.wacrm-blur-mode #pane-side,
+html.wacrm-blur-mode #main {
+  filter: blur(4px);
+  transition: filter 160ms ease;
+}
+
+html.wacrm-blur-mode #wacrm-root,
+html.wacrm-blur-mode #wacrm-dock {
+  filter: none !important;
 }
 
 .wacrm-card.wacrm-dragging,
@@ -210,6 +227,12 @@
   outline-offset: 1px;
 }
 
+.wacrm-filter-chip.active {
+  background: #dbf0dd;
+  border-color: #8fc79a;
+  color: #204524;
+}
+
 .wacrm-checklist {
   display: grid;
   gap: 6px;
@@ -247,6 +270,56 @@
 .wacrm-hot-list {
   display: grid;
   gap: 5px;
+}
+
+.wacrm-stage-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.wacrm-stage-row {
+  display: grid;
+  gap: 4px;
+}
+
+.wacrm-stage-lead {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #d7e3d7;
+  border-radius: 8px;
+  background: #f7fbf7;
+  color: #1f3521;
+  display: grid;
+  gap: 2px;
+  padding: 6px 7px;
+  cursor: pointer;
+}
+
+.wacrm-stage-lead:hover {
+  background: #eef6ee;
+}
+
+.wacrm-stage-lead:focus-visible {
+  outline: 2px solid #0a8f3f;
+  outline-offset: 1px;
+}
+
+.wacrm-stage-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.wacrm-playbook {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  color: #2e4054;
+  font-size: 11px;
+  line-height: 1.25;
 }
 
 .wacrm-hot-item {
@@ -305,6 +378,12 @@
 .wacrm-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.wacrm-btn-xs {
+  padding: 5px 8px;
+  font-size: 11px;
+  border-radius: 8px;
 }
 
 .wacrm-meta {

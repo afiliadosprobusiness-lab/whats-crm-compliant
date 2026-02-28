@@ -9,88 +9,98 @@
   <body>
     <main class="app">
       <header class="hero">
-        <p class="eyebrow">LeadWidget</p>
+        <div class="hero-top">
+          <p class="eyebrow">LeadWidget</p>
+          <label class="lang-picker">
+            <span class="sr-only" data-i18n="language_label">Idioma</span>
+            <select id="language-select" aria-label="Idioma">
+              <option value="es">ES</option>
+              <option value="en">EN</option>
+              <option value="pt">PT</option>
+            </select>
+          </label>
+        </div>
         <h1>WhatsWidget</h1>
-        <p class="subtitle">CRM para leads, plantillas, campanas y recordatorios en WhatsApp Web.</p>
+        <p class="subtitle" data-i18n="hero_subtitle">CRM para leads, plantillas, campanas y recordatorios en WhatsApp Web.</p>
       </header>
 
       <section class="card">
-        <h2>Acceso</h2>
+        <h2 data-i18n="access_title">Acceso</h2>
         <form id="login-form" class="grid">
           <label>
-            Email
+            <span data-i18n="label_email">Email</span>
             <input name="email" type="email" required />
           </label>
           <label>
-            Password
+            <span data-i18n="label_password">Password</span>
             <input name="password" type="password" required minlength="6" />
           </label>
-          <button type="submit">Iniciar sesion</button>
+          <button type="submit" data-i18n="btn_login">Iniciar sesion</button>
         </form>
         <details>
-          <summary>Crear cuenta owner</summary>
+          <summary data-i18n="summary_create_owner">Crear cuenta owner</summary>
           <form id="register-form" class="grid auth-subform">
             <label>
-              Empresa
+              <span data-i18n="label_company">Empresa</span>
               <input name="companyName" required />
             </label>
             <label>
-              Nombre
+              <span data-i18n="label_name">Nombre</span>
               <input name="name" required />
             </label>
             <label>
-              Email
+              <span data-i18n="label_email">Email</span>
               <input name="email" type="email" required />
             </label>
             <label>
-              Password
+              <span data-i18n="label_password">Password</span>
               <input name="password" type="password" required minlength="6" />
             </label>
-            <button type="submit">Crear cuenta</button>
+            <button type="submit" data-i18n="btn_create_account">Crear cuenta</button>
           </form>
         </details>
         <div class="session-row">
-          <small id="session-label">Sin sesion</small>
-          <button id="logout-btn" type="button">Cerrar sesion</button>
+          <small id="session-label" data-i18n="session_none">Sin sesion</small>
+          <button id="logout-btn" type="button" data-i18n="btn_logout">Cerrar sesion</button>
         </div>
       </section>
 
       <section class="card" data-crm>
-        <h2>Suscripcion</h2>
-        <p id="subscription-status" class="subscription-state subscription-state--inactive">Inactivo</p>
+        <h2 data-i18n="subscription_title">Suscripcion</h2>
+        <p id="subscription-status" class="subscription-state subscription-state--inactive" data-i18n="status_inactive">Inactivo</p>
       </section>
 
       <section class="card stats" data-crm>
-        <h2>Resumen</h2>
+        <h2 data-i18n="summary_title">Resumen</h2>
         <div class="kpis">
           <article>
-            <span>Leads</span>
+            <span data-i18n="kpi_leads">Leads</span>
             <strong id="kpi-leads">0</strong>
           </article>
           <article>
-            <span>Opt-in</span>
+            <span data-i18n="kpi_optin">Opt-in</span>
             <strong id="kpi-optin">0</strong>
           </article>
           <article>
-            <span>Campanas</span>
+            <span data-i18n="kpi_campaigns">Campanas</span>
             <strong id="kpi-campaigns">0</strong>
           </article>
         </div>
       </section>
 
       <section class="card" data-crm>
-        <h2>Nuevo Lead</h2>
+        <h2 data-i18n="lead_new_title">Nuevo Lead</h2>
         <form id="lead-form" class="grid">
           <label>
-            Nombre
+            <span data-i18n="label_name">Nombre</span>
             <input name="name" required minlength="2" maxlength="120" />
           </label>
           <label>
-            Telefono E.164
+            <span data-i18n="label_phone">Telefono E.164</span>
             <input name="phoneE164" required placeholder="+51999999999" />
           </label>
           <label>
-            Consentimiento
+            <span data-i18n="label_consent">Consentimiento</span>
             <select name="consentStatus" required>
               <option value="opted_in">opted_in</option>
               <option value="pending">pending</option>
@@ -98,7 +108,7 @@
             </select>
           </label>
           <label>
-            Etapa
+            <span data-i18n="label_stage">Etapa</span>
             <select name="stage" required>
               <option value="new">new</option>
               <option value="contacted">contacted</option>
@@ -108,75 +118,150 @@
             </select>
           </label>
           <label>
-            Fuente consentimiento
+            <span data-i18n="label_consent_source">Fuente consentimiento</span>
             <input name="consentSource" required value="form_web" />
           </label>
           <label>
-            Tags (coma)
+            <span data-i18n="label_tags">Tags (coma)</span>
             <input name="tags" placeholder="nuevo, lima, premium" />
           </label>
-          <button type="submit">Guardar lead</button>
+          <button type="submit" data-i18n="btn_save_lead">Guardar lead</button>
         </form>
       </section>
 
       <section class="card" data-crm>
-        <h2>Plantillas</h2>
+        <h2 data-i18n="templates_title">Plantillas</h2>
         <form id="template-form" class="grid">
           <label>
-            Nombre
+            <span data-i18n="label_name">Nombre</span>
             <input name="name" required />
           </label>
           <label>
-            Mensaje
+            <span data-i18n="label_message">Mensaje</span>
             <textarea name="body" rows="3" required placeholder="Hola {{name}}, ..."></textarea>
           </label>
-          <button type="submit">Guardar plantilla</button>
+          <button type="submit" data-i18n="btn_save_template">Guardar plantilla</button>
         </form>
         <ul id="template-list" class="list"></ul>
       </section>
 
       <section class="card" data-crm>
-        <h2>Campana masiva</h2>
+        <h2 data-i18n="campaign_title">Campana masiva</h2>
         <form id="campaign-form" class="grid">
           <label>
-            Nombre campana
+            <span data-i18n="label_campaign_name">Nombre campana</span>
             <input name="name" required placeholder="Promo Marzo" />
           </label>
           <label>
-            Plantilla
+            <span data-i18n="label_template">Plantilla</span>
             <select id="campaign-template-id" name="templateId" required></select>
           </label>
           <fieldset>
-            <legend>Destinatarios (solo opted_in)</legend>
+            <legend data-i18n="campaign_recipients_legend">Destinatarios (solo opted_in)</legend>
             <div id="campaign-recipients" class="check-list"></div>
           </fieldset>
-          <button type="submit">Crear y enviar</button>
+          <button type="submit" data-i18n="btn_campaign_send">Crear y enviar</button>
         </form>
       </section>
 
       <section class="card" data-crm>
-        <h2>Recordatorios</h2>
+        <h2 data-i18n="reminders_title">Recordatorios</h2>
         <form id="reminder-form" class="grid">
           <label>
-            Lead
+            <span data-i18n="label_lead">Lead</span>
             <select id="reminder-lead-id" name="leadId" required></select>
           </label>
           <label>
-            Nota
+            <span data-i18n="label_note">Nota</span>
             <input name="note" required maxlength="200" />
           </label>
           <label>
-            Fecha/Hora
+            <span data-i18n="label_due_at">Fecha/Hora</span>
             <input name="dueAt" type="datetime-local" required />
           </label>
-          <button type="submit">Crear recordatorio</button>
+          <button type="submit" data-i18n="btn_create_reminder">Crear recordatorio</button>
         </form>
         <ul id="reminder-list" class="list"></ul>
       </section>
 
       <section class="card" data-crm>
-        <h2>Embudo</h2>
+        <h2 data-i18n="kanban_title">Kanban</h2>
         <div id="pipeline" class="pipeline"></div>
+      </section>
+
+      <section class="card" data-crm>
+        <h2 data-i18n="segments_title">Pestanas personalizadas</h2>
+        <form id="segment-form" class="grid">
+          <label>
+            <span data-i18n="segment_name_label">Nombre</span>
+            <input name="name" required maxlength="24" placeholder="Urgentes" />
+          </label>
+          <div class="grid split-2">
+            <label>
+              <span data-i18n="segment_type_label">Tipo</span>
+              <select name="type" required>
+                <option value="tag" data-i18n="segment_type_tag">Tag</option>
+                <option value="source" data-i18n="segment_type_source">Fuente</option>
+                <option value="stage" data-i18n="segment_type_stage">Etapa</option>
+                <option value="urgency" data-i18n="segment_type_urgency">Urgencia</option>
+                <option value="agent" data-i18n="segment_type_agent">Agente</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="segment_value_label">Valor</span>
+              <input name="value" required placeholder="premium" />
+            </label>
+          </div>
+          <button type="submit" data-i18n="btn_save_segment">Guardar pestana</button>
+        </form>
+        <div id="segment-tabs" class="chip-row"></div>
+        <ul id="segment-lead-list" class="list"></ul>
+      </section>
+
+      <section class="card" data-crm>
+        <h2 data-i18n="unsaved_title">Numero no guardado</h2>
+        <form id="unsaved-form" class="grid">
+          <label>
+            <span data-i18n="label_phone">Telefono E.164</span>
+            <input name="phoneE164" required placeholder="+51999999999" />
+          </label>
+          <label>
+            <span data-i18n="label_message_optional">Mensaje (opcional)</span>
+            <textarea name="message" rows="2" placeholder="Hola, te escribo desde WhatsWidget."></textarea>
+          </label>
+          <button type="submit" data-i18n="btn_open_chat_manual">Abrir chat (manual)</button>
+        </form>
+      </section>
+
+      <section class="card" data-crm>
+        <h2 data-i18n="csv_title">Importar CSV a CRM</h2>
+        <form id="csv-import-form" class="grid">
+          <label>
+            <span data-i18n="csv_file_label">Archivo CSV</span>
+            <input type="file" name="file" accept=".csv,text/csv" required />
+          </label>
+          <div class="grid split-2">
+            <label>
+              <span data-i18n="label_consent">Consentimiento</span>
+              <select name="consentStatus" required>
+                <option value="pending">pending</option>
+                <option value="opted_in">opted_in</option>
+                <option value="opted_out">opted_out</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="label_stage">Etapa</span>
+              <select name="stage" required>
+                <option value="new">new</option>
+                <option value="contacted">contacted</option>
+                <option value="qualified">qualified</option>
+                <option value="won">won</option>
+                <option value="lost">lost</option>
+              </select>
+            </label>
+          </div>
+          <button type="submit" data-i18n="btn_import_csv">Importar CSV</button>
+        </form>
       </section>
 
       <p id="feedback" role="status" aria-live="polite"></p>

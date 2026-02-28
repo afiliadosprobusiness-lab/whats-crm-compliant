@@ -13,6 +13,9 @@
     "crm_tutorial_progress_v1",
     "crm_followup_usage_v1",
     "crm_panel_position_v1",
+    "crm_custom_stages_v1",
+    "crm_blur_mode_v1",
+    "crm_template_mode_v1",
   ];
   const FOLLOWUP_USAGE_KEY = "crm_followup_usage_v1";
   const FOLLOWUP_DAILY_LIMIT = 20;
@@ -22,6 +25,13 @@
   const CRM_BUILD_TAG = "0.4.7-2026-02-28";
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const PANEL_POSITION_KEY = "crm_panel_position_v1";
+  const CUSTOM_STAGES_KEY = "crm_custom_stages_v1";
+  const BLUR_MODE_KEY = "crm_blur_mode_v1";
+  const TEMPLATE_MODE_KEY = "crm_template_mode_v1";
+  const PIPELINE_STAGE_TAG_PREFIX = "step_";
+  const PIPELINE_STAGE_KEY_MAX_LEN = 25;
+  const TEMPLATE_MODES = ["general", "real_estate"];
+  const DEFAULT_TEMPLATE_MODE = "real_estate";
   const TUTORIAL_STEPS = [
     {
       id: "open_chat",
@@ -40,8 +50,8 @@
     },
     {
       id: "add_profile",
-      label: "Completar ficha inmobiliaria",
-      hint: "Define operacion, tipo, zona, presupuesto y urgencia.",
+      label: "Completar ficha del lead",
+      hint: "En modo Inmobiliaria define operacion/zona/presupuesto; en General registra datos clave de calificacion.",
     },
     {
       id: "insert_template",
@@ -55,26 +65,35 @@
     },
   ];
   const PROFILE_NOTE_PREFIX = "FICHA_INMO|";
-  const SUGGESTED_TAGS = [
-    "comprador",
-    "propietario",
-    "inversionista",
-    "alquiler",
-    "venta",
-    "departamento",
-    "casa",
-    "terreno",
-    "credito",
-    "urgente",
-  ];
-  const STAGE_SHORTCUTS = [
-    { label: "Nuevo", stage: "new", note: "Lead registrado en CRM." },
-    { label: "Contactado", stage: "contacted", note: "Contacto inicial realizado." },
-    { label: "Visita", stage: "qualified", note: "Visita agendada para este lead." },
-    { label: "Oferta", stage: "qualified", note: "Lead solicita propuesta/oferta." },
-    { label: "Cierre", stage: "won", note: "Lead marcado como cierre exitoso." },
-    { label: "Perdido", stage: "lost", note: "Lead descartado por ahora." },
-  ];
+  const SUGGESTED_TAGS_BY_TEMPLATE = {
+    general: ["nuevo", "seguimiento", "caliente", "propuesta", "vip", "cerrar", "referido", "recompra"],
+    real_estate: ["comprador", "propietario", "inversionista", "alquiler", "venta", "departamento", "casa", "terreno", "credito", "urgente"],
+  };
+  const STAGE_SHORTCUTS_BY_TEMPLATE = {
+    general: [
+      { key: "nuevo", label: "Nuevo", stage: "new", note: "Lead registrado en CRM." },
+      { key: "contactado", label: "Contactado", stage: "contacted", note: "Contacto inicial realizado." },
+      { key: "propuesta", label: "Propuesta", stage: "qualified", note: "Propuesta enviada al lead." },
+      { key: "negociacion", label: "Negociacion", stage: "qualified", note: "Lead en negociacion activa." },
+      { key: "cierre", label: "Cierre", stage: "won", note: "Lead marcado como cierre exitoso." },
+      { key: "perdido", label: "Perdido", stage: "lost", note: "Lead descartado por ahora." },
+    ],
+    real_estate: [
+      { key: "nuevo", label: "Nuevo", stage: "new", note: "Lead registrado en CRM." },
+      { key: "contactado", label: "Contactado", stage: "contacted", note: "Contacto inicial realizado." },
+      { key: "visita", label: "Visita", stage: "qualified", note: "Visita agendada para este lead." },
+      { key: "oferta", label: "Oferta", stage: "qualified", note: "Lead solicita propuesta/oferta." },
+      { key: "cierre", label: "Cierre", stage: "won", note: "Lead marcado como cierre exitoso." },
+      { key: "perdido", label: "Perdido", stage: "lost", note: "Lead descartado por ahora." },
+    ],
+  };
+  const RESERVED_STAGE_KEYS = Array.from(
+    new Set(
+      Object.values(STAGE_SHORTCUTS_BY_TEMPLATE)
+        .flat()
+        .map((shortcut) => shortcut.key)
+    )
+  );
   const REAL_ESTATE_PROFILE = {
     operation: [
       { value: "", label: "Selecciona" },
@@ -139,6 +158,13 @@
     syncTimer: null,
     tutorialProgress: {},
     panelPosition: null,
+    workspaceId: "",
+    customStages: [],
+    customStageStore: {},
+    stageFilterKey: "all",
+    blurMode: false,
+    templateMode: DEFAULT_TEMPLATE_MODE,
+    templateModeStore: {},
     nodes: {},
   };
 
@@ -344,6 +370,178 @@
       }
     });
     return Array.from(unique).slice(0, 8);
+  };
+
+  const normalizePipelineStageKey = (value) => {
+    return slugTag(value).slice(0, PIPELINE_STAGE_KEY_MAX_LEN);
+  };
+
+  const getPipelineTag = (stageKey) => {
+    const key = normalizePipelineStageKey(stageKey);
+    if (!key) {
+      return "";
+    }
+    return `${PIPELINE_STAGE_TAG_PREFIX}${key}`.slice(0, 30);
+  };
+
+  const withPipelineStageTag = (tags, stageKey) => {
+    const cleanTags = Array.isArray(tags) ? tags : [];
+    const baseTags = cleanTags.filter((tag) => {
+      const clean = slugTag(tag);
+      return Boolean(clean) && !clean.startsWith(PIPELINE_STAGE_TAG_PREFIX);
+    });
+    const stageTag = getPipelineTag(stageKey);
+    if (!stageTag) {
+      return mergeTags(baseTags);
+    }
+    const merged = mergeTags(baseTags, [stageTag]);
+    if (merged.includes(stageTag)) {
+      return merged;
+    }
+    return [...merged.slice(0, 7), stageTag];
+  };
+
+  const normalizeTemplateMode = (value) => {
+    return TEMPLATE_MODES.includes(value) ? value : DEFAULT_TEMPLATE_MODE;
+  };
+
+  const normalizeTemplateModeStore = (value) => {
+    if (!value || typeof value !== "object") {
+      return {};
+    }
+    const normalized = {};
+    Object.entries(value).forEach(([workspaceKey, mode]) => {
+      if (!workspaceKey) {
+        return;
+      }
+      normalized[workspaceKey] = normalizeTemplateMode(String(mode || "").trim());
+    });
+    return normalized;
+  };
+
+  const getBaseStageShortcuts = () => {
+    return STAGE_SHORTCUTS_BY_TEMPLATE[state.templateMode] || STAGE_SHORTCUTS_BY_TEMPLATE[DEFAULT_TEMPLATE_MODE];
+  };
+
+  const getDefaultPipelineKeyFromStage = (stage) => {
+    if (stage === "new") return "nuevo";
+    if (stage === "contacted") return "contactado";
+    if (stage === "won") return "cierre";
+    if (stage === "lost") return "perdido";
+    return state.templateMode === "general" ? "propuesta" : "visita";
+  };
+
+  const prettifyKeyLabel = (key) => {
+    return String(key || "")
+      .split("_")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  };
+
+  const normalizeCustomStages = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    const unique = new Map();
+    value.forEach((item) => {
+      if (!item || typeof item !== "object") {
+        return;
+      }
+      const key = normalizePipelineStageKey(item.key || item.label);
+      if (!key || RESERVED_STAGE_KEYS.includes(key)) {
+        return;
+      }
+      if (unique.has(key)) {
+        return;
+      }
+
+      const stage = LEAD_STAGES.includes(item.stage) ? item.stage : "qualified";
+      const label = String(item.label || "").trim().slice(0, 28) || prettifyKeyLabel(key);
+      unique.set(key, {
+        key,
+        label,
+        stage,
+        note: `Etapa personalizada: ${label}.`,
+        isCustom: true,
+      });
+    });
+
+    return Array.from(unique.values()).slice(0, 12);
+  };
+
+  const normalizeCustomStageStore = (value) => {
+    if (!value || typeof value !== "object") {
+      return {};
+    }
+
+    const normalized = {};
+    Object.entries(value).forEach(([workspaceKey, stages]) => {
+      if (!workspaceKey) {
+        return;
+      }
+      normalized[workspaceKey] = normalizeCustomStages(stages);
+    });
+    return normalized;
+  };
+
+  const getWorkspaceStorageKey = () => {
+    return state.workspaceId || "__default__";
+  };
+
+  const getPipelineStages = () => {
+    return [...getBaseStageShortcuts(), ...state.customStages];
+  };
+
+  const getPipelineStageByKey = (stageKey) => {
+    const key = normalizePipelineStageKey(stageKey);
+    if (!key) {
+      return null;
+    }
+    return getPipelineStages().find((item) => item.key === key) || null;
+  };
+
+  const getLeadPipelineStageKey = (lead) => {
+    const tags = Array.isArray(lead?.tags) ? lead.tags : [];
+    const pipelineTag = tags
+      .map((tag) => slugTag(tag))
+      .find((tag) => tag.startsWith(PIPELINE_STAGE_TAG_PREFIX));
+    if (pipelineTag) {
+      const parsedKey = normalizePipelineStageKey(pipelineTag.slice(PIPELINE_STAGE_TAG_PREFIX.length));
+      if (parsedKey) {
+        return parsedKey;
+      }
+    }
+    return getDefaultPipelineKeyFromStage(lead?.stage);
+  };
+
+  const getLeadPipelineLabel = (lead) => {
+    const key = getLeadPipelineStageKey(lead);
+    const stage = getPipelineStageByKey(key);
+    return stage?.label || prettifyKeyLabel(key);
+  };
+
+  const applyWorkspaceCustomStages = () => {
+    const workspaceKey = getWorkspaceStorageKey();
+    state.customStages = normalizeCustomStages(state.customStageStore[workspaceKey]);
+  };
+
+  const applyWorkspaceTemplateMode = () => {
+    const workspaceKey = getWorkspaceStorageKey();
+    state.templateMode = normalizeTemplateMode(state.templateModeStore[workspaceKey]);
+  };
+
+  const persistCustomStages = async () => {
+    const workspaceKey = getWorkspaceStorageKey();
+    state.customStageStore[workspaceKey] = normalizeCustomStages(state.customStages);
+    await storageSet({ [CUSTOM_STAGES_KEY]: state.customStageStore });
+  };
+
+  const persistTemplateMode = async () => {
+    const workspaceKey = getWorkspaceStorageKey();
+    state.templateModeStore[workspaceKey] = normalizeTemplateMode(state.templateMode);
+    await storageSet({ [TEMPLATE_MODE_KEY]: state.templateModeStore });
   };
 
   const parseProfileNote = (lead) => {
@@ -670,11 +868,176 @@
       button.className = "wacrm-hot-item";
       button.innerHTML = `
         <span class="wacrm-hot-name">${item.lead.name}</span>
-        <span class="wacrm-hot-meta">${item.lead.stage} | ${item.lead.phoneE164 || "-"}</span>
+        <span class="wacrm-hot-meta">${getLeadPipelineLabel(item.lead)} | ${item.lead.phoneE164 || "-"}</span>
       `;
       button.addEventListener("click", () => fillLeadIntoForm(item.lead));
       listEl.appendChild(button);
     });
+  };
+
+  const openLeadChat = (lead) => {
+    const phoneDigits = String(lead?.phoneE164 || "").replace(/\D/g, "");
+    if (!phoneDigits) {
+      setStatus("El lead no tiene telefono valido para abrir chat.", true);
+      return;
+    }
+    window.location.href = `https://web.whatsapp.com/send?phone=${phoneDigits}`;
+  };
+
+  const getFilteredLeads = () => {
+    const leads = Array.isArray(state.leads) ? state.leads : [];
+    const filtered = state.stageFilterKey === "all"
+      ? leads
+      : leads.filter((lead) => getLeadPipelineStageKey(lead) === state.stageFilterKey);
+    return filtered
+      .slice()
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+  };
+
+  const renderStageLeads = () => {
+    const listEl = state.nodes.stageLeadsEl;
+    const metaEl = state.nodes.stageFilterMetaEl;
+    if (!listEl || !metaEl) {
+      return;
+    }
+    const leads = getFilteredLeads();
+    const selectedStage = getPipelineStageByKey(state.stageFilterKey);
+    const selectedLabel = state.stageFilterKey === "all" ? "todas" : (selectedStage?.label || prettifyKeyLabel(state.stageFilterKey));
+    metaEl.textContent = `${leads.length} contacto(s) en ${selectedLabel}.`;
+    listEl.innerHTML = "";
+
+    if (leads.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "wacrm-meta";
+      empty.textContent = "No hay contactos para esa etapa.";
+      listEl.appendChild(empty);
+      return;
+    }
+
+    leads.slice(0, 40).forEach((lead) => {
+      const row = document.createElement("div");
+      row.className = "wacrm-stage-row";
+
+      const info = document.createElement("button");
+      info.type = "button";
+      info.className = "wacrm-stage-lead";
+      info.innerHTML = `
+        <span class="wacrm-hot-name">${lead.name || "Sin nombre"}</span>
+        <span class="wacrm-hot-meta">${getLeadPipelineLabel(lead)} | ${lead.phoneE164 || "-"}</span>
+      `;
+      info.addEventListener("click", () => {
+        fillLeadIntoForm(lead);
+        openSectionFromMenu("lead");
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "wacrm-stage-actions";
+
+      const useBtn = document.createElement("button");
+      useBtn.type = "button";
+      useBtn.className = "wacrm-btn ghost wacrm-btn-xs";
+      useBtn.textContent = "Usar";
+      useBtn.addEventListener("click", () => fillLeadIntoForm(lead));
+
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "wacrm-btn ghost wacrm-btn-xs";
+      openBtn.textContent = "Abrir chat";
+      openBtn.addEventListener("click", () => openLeadChat(lead));
+
+      actions.appendChild(useBtn);
+      actions.appendChild(openBtn);
+      row.appendChild(info);
+      row.appendChild(actions);
+      listEl.appendChild(row);
+    });
+  };
+
+  const renderStageFilters = () => {
+    const filtersEl = state.nodes.stageFiltersEl;
+    if (!filtersEl) {
+      return;
+    }
+    if (state.stageFilterKey !== "all" && !getPipelineStageByKey(state.stageFilterKey)) {
+      state.stageFilterKey = "all";
+    }
+    filtersEl.innerHTML = "";
+
+    const allBtn = document.createElement("button");
+    allBtn.type = "button";
+    allBtn.className = "wacrm-chip wacrm-filter-chip";
+    allBtn.textContent = "Todos";
+    allBtn.classList.toggle("active", state.stageFilterKey === "all");
+    allBtn.addEventListener("click", () => {
+      state.stageFilterKey = "all";
+      renderStageFilters();
+      renderStageLeads();
+    });
+    filtersEl.appendChild(allBtn);
+
+    getPipelineStages().forEach((stage) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "wacrm-chip wacrm-filter-chip";
+      button.textContent = stage.label;
+      button.classList.toggle("active", stage.key === state.stageFilterKey);
+      button.addEventListener("click", () => {
+        state.stageFilterKey = stage.key;
+        renderStageFilters();
+        renderStageLeads();
+      });
+      filtersEl.appendChild(button);
+    });
+  };
+
+  const renderCustomStageMeta = () => {
+    const metaEl = state.nodes.customStageMetaEl;
+    if (!metaEl) {
+      return;
+    }
+    if (!state.customStages.length) {
+      metaEl.textContent = "Sin etapas personalizadas.";
+      return;
+    }
+    metaEl.textContent = `Personalizadas: ${state.customStages.map((item) => item.label).join(", ")}.`;
+  };
+
+  const addCustomStage = async () => {
+    const inputEl = state.nodes.customStageInput;
+    if (!inputEl) {
+      return;
+    }
+    const labelRaw = String(inputEl.value || "").trim();
+    if (labelRaw.length < 2) {
+      setStatus("Escribe un nombre valido para la nueva etapa.", true);
+      return;
+    }
+
+    const key = normalizePipelineStageKey(labelRaw);
+    if (!key) {
+      setStatus("El nombre de etapa no es valido.", true);
+      return;
+    }
+    if (getPipelineStageByKey(key)) {
+      setStatus("Esa etapa ya existe.", true);
+      return;
+    }
+
+    state.customStages = normalizeCustomStages([
+      ...state.customStages,
+      {
+        key,
+        label: labelRaw,
+        stage: "qualified",
+      },
+    ]);
+    inputEl.value = "";
+    await persistCustomStages();
+    renderCustomStageMeta();
+    renderStageShortcuts();
+    renderStageFilters();
+    renderStageLeads();
+    setStatus(`Etapa personalizada creada: ${labelRaw}.`);
   };
 
   const renderTutorial = () => {
@@ -858,7 +1221,7 @@
     const tagsText = Array.isArray(state.currentLead.tags) && state.currentLead.tags.length > 0
       ? state.currentLead.tags.join(", ")
       : "-";
-    state.nodes.leadMetaEl.textContent = `Lead: ${state.currentLead.name} | etapa: ${state.currentLead.stage} | tags: ${tagsText}`;
+    state.nodes.leadMetaEl.textContent = `Lead: ${state.currentLead.name} | etapa: ${getLeadPipelineLabel(state.currentLead)} | tags: ${tagsText}`;
     state.nodes.noteBtn.disabled = false;
     state.nodes.stageBtn.disabled = false;
     state.nodes.reminderBtn.disabled = false;
@@ -889,7 +1252,11 @@
       if (state.nodes.tagsInput) {
         state.nodes.tagsInput.value = (state.currentLead.tags || []).join(", ");
       }
-      fillProfileForm(parseProfileNote(state.currentLead));
+      if (state.templateMode === "real_estate") {
+        fillProfileForm(parseProfileNote(state.currentLead));
+      } else {
+        fillProfileForm(null);
+      }
     } else {
       fillProfileForm(null);
     }
@@ -925,7 +1292,8 @@
       return;
     }
     container.innerHTML = "";
-    SUGGESTED_TAGS.forEach((tag) => {
+    const suggestions = SUGGESTED_TAGS_BY_TEMPLATE[state.templateMode] || SUGGESTED_TAGS_BY_TEMPLATE[DEFAULT_TEMPLATE_MODE];
+    suggestions.forEach((tag) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "wacrm-chip";
@@ -935,13 +1303,58 @@
     });
   };
 
+  const getTemplatePlaybookSteps = () => {
+    if (state.templateMode === "general") {
+      return [
+        "Paso 1: valida necesidad y objetivo principal del lead.",
+        "Paso 2: confirma presupuesto, plazo y decisor.",
+        "Paso 3: envia propuesta clara y acuerda siguiente accion.",
+      ];
+    }
+    return [
+      "Paso 1: valida operacion, zona y presupuesto.",
+      "Paso 2: agenda visita o llamada de calificacion.",
+      "Paso 3: presenta opciones y empuja oferta/cierre.",
+    ];
+  };
+
+  const renderTemplatePlaybook = () => {
+    const listEl = state.nodes.templateStepsEl;
+    if (!listEl) {
+      return;
+    }
+    listEl.innerHTML = "";
+    getTemplatePlaybookSteps().forEach((step) => {
+      const li = document.createElement("li");
+      li.textContent = step;
+      listEl.appendChild(li);
+    });
+  };
+
+  const applyTemplateModeUI = () => {
+    if (state.nodes.templateModeSelect) {
+      state.nodes.templateModeSelect.value = state.templateMode;
+    }
+    if (state.nodes.templateModeMetaEl) {
+      state.nodes.templateModeMetaEl.textContent = state.templateMode === "real_estate" ? "Inmobiliaria" : "General";
+    }
+    const isRealEstate = state.templateMode === "real_estate";
+    if (state.nodes.realEstateBlock) {
+      state.nodes.realEstateBlock.classList.toggle("wacrm-hidden-block", !isRealEstate);
+    }
+    if (state.nodes.generalBlock) {
+      state.nodes.generalBlock.classList.toggle("wacrm-hidden-block", isRealEstate);
+    }
+    renderTemplatePlaybook();
+  };
+
   const renderStageShortcuts = () => {
     const container = state.nodes.stageShortcutsEl;
     if (!container) {
       return;
     }
     container.innerHTML = "";
-    STAGE_SHORTCUTS.forEach((shortcut) => {
+    getPipelineStages().forEach((shortcut) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "wacrm-btn ghost";
@@ -989,6 +1402,9 @@
   const fetchWorkspaceData = async () => {
     if (!state.token) {
       state.me = null;
+      state.workspaceId = "";
+      applyWorkspaceCustomStages();
+      applyWorkspaceTemplateMode();
       state.subscription = null;
       state.canUseCrm = false;
       state.templates = [];
@@ -998,6 +1414,12 @@
       renderTemplates();
       fillProfileForm(null);
       renderHotLeads();
+      renderCustomStageMeta();
+      applyTemplateModeUI();
+      renderTagSuggestions();
+      renderStageShortcuts();
+      renderStageFilters();
+      renderStageLeads();
       setModeState();
       updateLeadMeta();
       updatePipelineMeta();
@@ -1008,6 +1430,9 @@
     const meData = await apiRequest("/auth/me");
     const billingData = await apiRequest("/billing/subscription");
     state.me = meData.user || null;
+    state.workspaceId = String(meData?.workspace?.id || meData?.user?.workspaceId || "").trim();
+    applyWorkspaceCustomStages();
+    applyWorkspaceTemplateMode();
     state.subscription = billingData.subscription || null;
     state.canUseCrm = Boolean(state.subscription?.canUseCrm);
 
@@ -1018,6 +1443,12 @@
       state.currentLead = null;
       renderTemplates();
       renderHotLeads();
+      renderCustomStageMeta();
+      applyTemplateModeUI();
+      renderTagSuggestions();
+      renderStageShortcuts();
+      renderStageFilters();
+      renderStageLeads();
       updateLeadMeta();
       updatePipelineMeta();
       setModeState();
@@ -1037,10 +1468,17 @@
     renderTemplates();
     updatePipelineMeta();
     renderHotLeads();
+    renderCustomStageMeta();
+    applyTemplateModeUI();
+    renderTagSuggestions();
+    renderStageShortcuts();
+    renderStageFilters();
+    renderStageLeads();
     syncLeadWithPhone();
     await refreshFollowupMeta();
     setModeState();
-    setStatus(`CRM inmobiliario activo para ${state.me?.email || "workspace actual"}.`);
+    const modeLabel = state.templateMode === "real_estate" ? "Inmobiliaria" : "General";
+    setStatus(`CRM activo (${modeLabel}) para ${state.me?.email || "workspace actual"}.`);
   };
 
   const insertMessageIntoComposer = (message) => {
@@ -1054,6 +1492,89 @@
     composer.textContent = message;
     composer.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: message }));
     return true;
+  };
+
+  const applyBlurMode = () => {
+    document.documentElement.classList.toggle("wacrm-blur-mode", state.blurMode);
+    if (state.nodes.blurBtn) {
+      state.nodes.blurBtn.textContent = state.blurMode ? "Blur ON" : "Blur OFF";
+    }
+  };
+
+  const getLeadCopilotContext = () => {
+    const lead = state.currentLead;
+    if (!lead) {
+      return null;
+    }
+    const stageLabel = getLeadPipelineLabel(lead);
+    const tags = Array.isArray(lead.tags) ? lead.tags.slice(0, 5).join(", ") : "-";
+    const reminder = getNextDueReminderForLead(lead.id);
+    return {
+      lead,
+      stageLabel,
+      tags,
+      reminderText: reminder?.note ? String(reminder.note).slice(0, 160) : "",
+    };
+  };
+
+  const buildCopilotOutput = (mode) => {
+    const context = getLeadCopilotContext();
+    if (!context) {
+      return "Primero selecciona o guarda un lead del chat actual.";
+    }
+    const name = String(context.lead.name || state.currentChat?.name || "cliente").trim();
+
+    if (mode === "summary") {
+      return `Resumen lead: ${name} | etapa: ${context.stageLabel} | tags: ${context.tags || "-"}${
+        context.reminderText ? ` | recordatorio: ${context.reminderText}` : ""
+      }`;
+    }
+    if (mode === "next") {
+      const nextAction = context.lead.stage === "new"
+        ? "hacer primer contacto y validar presupuesto/zona"
+        : context.lead.stage === "contacted"
+          ? "cerrar fecha de visita o llamada de calificaci\u00f3n"
+          : context.lead.stage === "qualified"
+            ? "presentar propuesta y resolver objeciones"
+            : context.lead.stage === "won"
+              ? "activar onboarding y solicitar referidos"
+              : "agendar reactivacion a 30 dias";
+      return `Siguiente accion recomendada: ${nextAction}.`;
+    }
+
+    const opening = context.lead.stage === "new" ? "Gracias por escribirnos." : "Seguimos con tu consulta.";
+    const reminderLine = context.reminderText ? ` ${context.reminderText}.` : "";
+    return `Hola ${name}, ${opening}${reminderLine} Si te parece, hoy avanzamos con los siguientes pasos y te envio opciones concretas.`;
+  };
+
+  const runCopilot = (mode) => {
+    const output = buildCopilotOutput(mode);
+    if (state.nodes.copilotOutput) {
+      state.nodes.copilotOutput.value = output;
+    }
+    setStatus("Copiloto listo. Revisa el texto antes de insertarlo.");
+  };
+
+  const insertCopilotOutput = () => {
+    const text = String(state.nodes.copilotOutput?.value || "").trim();
+    if (!text) {
+      setStatus("Genera una sugerencia antes de insertar.", true);
+      return;
+    }
+    const inserted = insertMessageIntoComposer(text);
+    if (!inserted) {
+      return;
+    }
+    setStatus("Texto del copiloto insertado. Envio manual.");
+  };
+
+  const handoffToHuman = async () => {
+    const lead = await ensureCurrentLead();
+    await apiRequest(`/leads/${lead.id}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ note: "Derivacion manual a humano solicitada desde Copiloto." }),
+    });
+    setStatus("Lead marcado para derivacion humana.");
   };
 
   const getNextDueReminderForLead = (leadId) => {
@@ -1152,21 +1673,23 @@
     }
 
     const tagsRaw = parseCsvTags(String(state.nodes.tagsInput?.value || ""));
-    const profile = getProfileFromForm();
-    const derivedTags = buildProfileDerivedTags(profile);
-    const tags = mergeTags(tagsRaw, derivedTags);
+    const profile = state.templateMode === "real_estate" ? getProfileFromForm() : null;
+    const derivedTags = profile ? buildProfileDerivedTags(profile) : [];
+    const stage = state.nodes.stageSelect?.value || "new";
+    const pipelineStageKey = getDefaultPipelineKeyFromStage(stage);
+    const tags = withPipelineStageTag(mergeTags(tagsRaw, derivedTags), pipelineStageKey);
     const payload = {
       name,
       phoneE164: phone,
       consentStatus: state.nodes.consentSelect?.value || "pending",
       consentSource: "whatsapp_web_manual",
-      stage: state.nodes.stageSelect?.value || "new",
+      stage,
       tags,
     };
 
     const result = await apiRequest("/leads/upsert", { method: "POST", body: JSON.stringify(payload) });
     const leadId = result?.lead?.id;
-    if (leadId && hasProfileData(profile)) {
+    if (leadId && profile && hasProfileData(profile)) {
       await apiRequest(`/leads/${leadId}/notes`, {
         method: "POST",
         body: JSON.stringify({ note: buildProfileNote(profile) }),
@@ -1191,14 +1714,29 @@
     return state.currentLead;
   };
 
+  const syncLeadPipelineStage = async (lead, stage, stageKey, note) => {
+    const nextTags = withPipelineStageTag(lead?.tags || [], stageKey);
+    await apiRequest(`/leads/${lead.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ stage, tags: nextTags }),
+    });
+    if (note) {
+      await apiRequest(`/leads/${lead.id}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ note }),
+      });
+    }
+  };
+
   const updateLeadStage = async () => {
     const lead = await ensureCurrentLead();
 
     const stage = state.nodes.stageSelect?.value || lead.stage;
-    await apiRequest(`/leads/${lead.id}/stage`, {
-      method: "PATCH",
-      body: JSON.stringify({ stage }),
-    });
+    const currentPipelineKey = getLeadPipelineStageKey(lead);
+    const currentPipeline = getPipelineStageByKey(currentPipelineKey);
+    const isCurrentCompatible = Boolean(currentPipeline && currentPipeline.stage === stage);
+    const nextPipelineKey = isCurrentCompatible ? currentPipelineKey : getDefaultPipelineKeyFromStage(stage);
+    await syncLeadPipelineStage(lead, stage, nextPipelineKey);
     void markTutorialStep("set_stage");
     setStatus("Etapa actualizada.");
     await fetchWorkspaceData();
@@ -1206,16 +1744,7 @@
 
   const applyStageShortcut = async (shortcut) => {
     const lead = await ensureCurrentLead();
-    await apiRequest(`/leads/${lead.id}/stage`, {
-      method: "PATCH",
-      body: JSON.stringify({ stage: shortcut.stage }),
-    });
-    if (shortcut.note) {
-      await apiRequest(`/leads/${lead.id}/notes`, {
-        method: "POST",
-        body: JSON.stringify({ note: shortcut.note }),
-      });
-    }
+    await syncLeadPipelineStage(lead, shortcut.stage, shortcut.key, shortcut.note);
     void markTutorialStep("set_stage");
     setStatus(`Atajo aplicado: ${shortcut.label}.`);
     await fetchWorkspaceData();
@@ -1342,7 +1871,10 @@
       <div class="wacrm-card">
         <div class="wacrm-header">
           <span class="wacrm-title">WhatsWidget ${CRM_BUILD_TAG}</span>
-          <button type="button" class="wacrm-minify" id="wacrm-toggle">Minimizar</button>
+          <div class="wacrm-header-actions">
+            <button type="button" class="wacrm-minify" id="wacrm-toggle-blur">Blur OFF</button>
+            <button type="button" class="wacrm-minify" id="wacrm-toggle">Minimizar</button>
+          </div>
         </div>
         <div class="wacrm-body" id="wacrm-body">
           <p class="wacrm-status" id="wacrm-status">Inicializando CRM...</p>
@@ -1372,8 +1904,26 @@
               <p class="wacrm-meta" id="wacrm-hot-meta">Sin leads calientes hoy.</p>
               <div class="wacrm-hot-list" id="wacrm-hot-leads"></div>
             </div>
+            <div class="wacrm-block" data-section="overview,lead">
+              <h4>Contactos por etapa</h4>
+              <div class="wacrm-chip-row" id="wacrm-stage-filters"></div>
+              <p class="wacrm-meta" id="wacrm-stage-filter-meta">0 contacto(s) en todas.</p>
+              <div class="wacrm-stage-list" id="wacrm-stage-leads"></div>
+            </div>
             <div class="wacrm-block" data-section="lead">
               <h4>Lead rapido</h4>
+              <div class="wacrm-grid two">
+                <label class="wacrm-label">Plantilla
+                  <select class="wacrm-select" id="wacrm-template-mode">
+                    <option value="general">General</option>
+                    <option value="real_estate">Inmobiliaria</option>
+                  </select>
+                </label>
+                <div class="wacrm-label">
+                  <span>Modo activo</span>
+                  <p class="wacrm-meta" id="wacrm-template-mode-meta">Inmobiliaria</p>
+                </div>
+              </div>
               <label class="wacrm-label">Nombre<input class="wacrm-input" id="wacrm-name" /></label>
               <label class="wacrm-label">Telefono E.164<input class="wacrm-input" id="wacrm-phone" placeholder="+51999999999" /></label>
               <div class="wacrm-grid two">
@@ -1393,9 +1943,24 @@
               </div>
               <p class="wacrm-meta">Atajos de pipeline</p>
               <div class="wacrm-actions" id="wacrm-stage-shortcuts"></div>
+              <div class="wacrm-grid two">
+                <label class="wacrm-label">Nueva etapa
+                  <input class="wacrm-input" id="wacrm-custom-stage-input" placeholder="Separacion, postventa, etc." />
+                </label>
+                <div class="wacrm-label">
+                  <span>Accion</span>
+                  <button type="button" class="wacrm-btn ghost" id="wacrm-add-custom-stage">Crear etapa</button>
+                </div>
+              </div>
+              <p class="wacrm-meta" id="wacrm-custom-stage-meta">Sin etapas personalizadas.</p>
               <p class="wacrm-meta" id="wacrm-lead-meta">Sin lead asociado al chat actual.</p>
             </div>
-            <div class="wacrm-block" data-section="lead">
+            <div class="wacrm-block" data-section="lead" id="wacrm-general-block">
+              <h4>Playbook general</h4>
+              <ol class="wacrm-playbook" id="wacrm-template-steps"></ol>
+              <p class="wacrm-meta">Usa estos pasos para servicios, ecommerce o ventas generales.</p>
+            </div>
+            <div class="wacrm-block" data-section="lead" id="wacrm-real-estate-block">
               <h4>Ficha inmobiliaria</h4>
               <div class="wacrm-grid two">
                 <label class="wacrm-label">Operacion
@@ -1468,6 +2033,22 @@
                 </div>
               </div>
             </div>
+            <div class="wacrm-block" data-section="actions">
+              <h4>Copiloto asistido</h4>
+              <div class="wacrm-actions">
+                <button type="button" class="wacrm-btn ghost" id="wacrm-copilot-reply">Sugerir respuesta</button>
+                <button type="button" class="wacrm-btn ghost" id="wacrm-copilot-summary">Resumir lead</button>
+                <button type="button" class="wacrm-btn ghost" id="wacrm-copilot-next">Siguiente accion</button>
+              </div>
+              <label class="wacrm-label">Salida copiloto
+                <textarea class="wacrm-textarea" id="wacrm-copilot-output" placeholder="Genera una sugerencia..."></textarea>
+              </label>
+              <div class="wacrm-actions">
+                <button type="button" class="wacrm-btn secondary" id="wacrm-copilot-insert">Insertar en chat</button>
+                <button type="button" class="wacrm-btn ghost" id="wacrm-copilot-human">Derivar a humano</button>
+              </div>
+              <p class="wacrm-meta">Modo asistido: nunca envia automaticamente.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -1486,6 +2067,14 @@
     state.nodes.tutorialListEl = root.querySelector("#wacrm-tutorial-list");
     state.nodes.hotLeadsMetaEl = root.querySelector("#wacrm-hot-meta");
     state.nodes.hotLeadsEl = root.querySelector("#wacrm-hot-leads");
+    state.nodes.stageFiltersEl = root.querySelector("#wacrm-stage-filters");
+    state.nodes.stageFilterMetaEl = root.querySelector("#wacrm-stage-filter-meta");
+    state.nodes.stageLeadsEl = root.querySelector("#wacrm-stage-leads");
+    state.nodes.templateModeSelect = root.querySelector("#wacrm-template-mode");
+    state.nodes.templateModeMetaEl = root.querySelector("#wacrm-template-mode-meta");
+    state.nodes.templateStepsEl = root.querySelector("#wacrm-template-steps");
+    state.nodes.generalBlock = root.querySelector("#wacrm-general-block");
+    state.nodes.realEstateBlock = root.querySelector("#wacrm-real-estate-block");
     state.nodes.nameInput = root.querySelector("#wacrm-name");
     state.nodes.phoneInput = root.querySelector("#wacrm-phone");
     state.nodes.stageSelect = root.querySelector("#wacrm-stage");
@@ -1493,6 +2082,8 @@
     state.nodes.tagsInput = root.querySelector("#wacrm-tags");
     state.nodes.tagSuggestionsEl = root.querySelector("#wacrm-tag-suggestions");
     state.nodes.stageShortcutsEl = root.querySelector("#wacrm-stage-shortcuts");
+    state.nodes.customStageInput = root.querySelector("#wacrm-custom-stage-input");
+    state.nodes.customStageMetaEl = root.querySelector("#wacrm-custom-stage-meta");
     state.nodes.operationSelect = root.querySelector("#wacrm-operation");
     state.nodes.propertyTypeSelect = root.querySelector("#wacrm-property-type");
     state.nodes.districtInput = root.querySelector("#wacrm-district");
@@ -1514,6 +2105,8 @@
     state.nodes.noteBtn = root.querySelector("#wacrm-save-note");
     state.nodes.stageBtn = root.querySelector("#wacrm-update-stage");
     state.nodes.reminderBtn = root.querySelector("#wacrm-save-reminder");
+    state.nodes.blurBtn = root.querySelector("#wacrm-toggle-blur");
+    state.nodes.copilotOutput = root.querySelector("#wacrm-copilot-output");
 
     populateSelect(
       state.nodes.stageSelect,
@@ -1530,15 +2123,25 @@
     populateSelect(state.nodes.sourceSelect, REAL_ESTATE_PROFILE.source);
     populateSelect(state.nodes.urgencySelect, REAL_ESTATE_PROFILE.urgency);
     state.nodes.consentSelect.value = "opted_in";
+    applyTemplateModeUI();
     renderTagSuggestions();
     renderStageShortcuts();
     renderTutorial();
     renderHotLeads();
+    renderCustomStageMeta();
+    renderStageFilters();
+    renderStageLeads();
+    applyBlurMode();
 
     root.querySelector("#wacrm-toggle").addEventListener("click", () => {
       state.collapsed = !state.collapsed;
       state.nodes.bodyEl.classList.toggle("wacrm-hidden", state.collapsed);
       root.querySelector("#wacrm-toggle").textContent = state.collapsed ? "Expandir" : "Minimizar";
+    });
+    root.querySelector("#wacrm-toggle-blur").addEventListener("click", () => {
+      state.blurMode = !state.blurMode;
+      void storageSet({ [BLUR_MODE_KEY]: state.blurMode });
+      applyBlurMode();
     });
 
     state.nodes.tabButtons.forEach((button) => {
@@ -1571,12 +2174,47 @@
     root.querySelector("#wacrm-quick-followup").addEventListener("click", () => {
       void withSyncGuard(createQuickFollowup);
     });
+    root.querySelector("#wacrm-copilot-reply").addEventListener("click", () => {
+      runCopilot("reply");
+    });
+    root.querySelector("#wacrm-copilot-summary").addEventListener("click", () => {
+      runCopilot("summary");
+    });
+    root.querySelector("#wacrm-copilot-next").addEventListener("click", () => {
+      runCopilot("next");
+    });
+    root.querySelector("#wacrm-copilot-insert").addEventListener("click", () => {
+      insertCopilotOutput();
+    });
+    root.querySelector("#wacrm-copilot-human").addEventListener("click", () => {
+      void withSyncGuard(handoffToHuman);
+    });
+    root.querySelector("#wacrm-add-custom-stage").addEventListener("click", () => {
+      void withSyncGuard(addCustomStage);
+    });
     root.querySelector("#wacrm-reset-tutorial").addEventListener("click", () => {
       void resetTutorial();
     });
 
     state.nodes.phoneInput.addEventListener("input", () => {
       syncLeadWithPhone();
+    });
+    state.nodes.templateModeSelect?.addEventListener("change", () => {
+      state.templateMode = normalizeTemplateMode(state.nodes.templateModeSelect.value);
+      void persistTemplateMode();
+      applyTemplateModeUI();
+      renderTagSuggestions();
+      renderStageShortcuts();
+      renderStageFilters();
+      renderStageLeads();
+      syncLeadWithPhone();
+      setStatus(`Plantilla activa: ${state.templateMode === "real_estate" ? "Inmobiliaria" : "General"}.`);
+    });
+    state.nodes.customStageInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void withSyncGuard(addCustomStage);
+      }
     });
     enablePanelDragging(root);
     void refreshFollowupMeta();
@@ -1589,7 +2227,19 @@
     state.token = String(values.crm_token || "").trim();
     state.tutorialProgress = normalizeTutorialProgress(values[TUTORIAL_PROGRESS_KEY]);
     state.panelPosition = normalizePanelPosition(values[PANEL_POSITION_KEY]);
+    state.customStageStore = normalizeCustomStageStore(values[CUSTOM_STAGES_KEY]);
+    state.templateModeStore = normalizeTemplateModeStore(values[TEMPLATE_MODE_KEY]);
+    state.blurMode = Boolean(values[BLUR_MODE_KEY]);
+    applyWorkspaceCustomStages();
+    applyWorkspaceTemplateMode();
     renderTutorial();
+    renderCustomStageMeta();
+    applyTemplateModeUI();
+    renderStageShortcuts();
+    renderStageFilters();
+    renderStageLeads();
+    renderTagSuggestions();
+    applyBlurMode();
   };
 
   const startWatchers = () => {
@@ -1611,6 +2261,27 @@
         if (changes[PANEL_POSITION_KEY]) {
           state.panelPosition = normalizePanelPosition(changes[PANEL_POSITION_KEY].newValue);
           positionPanel();
+        }
+        if (changes[CUSTOM_STAGES_KEY]) {
+          state.customStageStore = normalizeCustomStageStore(changes[CUSTOM_STAGES_KEY].newValue);
+          applyWorkspaceCustomStages();
+          renderCustomStageMeta();
+          renderStageShortcuts();
+          renderStageFilters();
+          renderStageLeads();
+        }
+        if (changes[TEMPLATE_MODE_KEY]) {
+          state.templateModeStore = normalizeTemplateModeStore(changes[TEMPLATE_MODE_KEY].newValue);
+          applyWorkspaceTemplateMode();
+          applyTemplateModeUI();
+          renderTagSuggestions();
+          renderStageShortcuts();
+          renderStageFilters();
+          renderStageLeads();
+        }
+        if (changes[BLUR_MODE_KEY]) {
+          state.blurMode = Boolean(changes[BLUR_MODE_KEY].newValue);
+          applyBlurMode();
         }
 
         if (mustReload) {

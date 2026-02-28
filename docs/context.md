@@ -18,16 +18,27 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
   - Branding actual de extension: `WhatsWidget` (marca LeadWidget) con icono oficial de LeadWidget.
   - Popup con endpoint API fijo a produccion (sin edicion manual de URL/keys) para reducir errores operativos.
   - Acceso en popup por email/password (sin configuracion manual de Google/OAuth en UI final).
-  - Incluye `content_script` en `web.whatsapp.com` para panel CRM embebido (sin auto-envio), con foco inmobiliario:
-    - ficha de lead (operacion, tipo de propiedad, zona, presupuesto, fuente, urgencia)
-    - etiquetas sugeridas + atajos de etapa
+  - Incluye `content_script` en `web.whatsapp.com` para panel CRM embebido (sin auto-envio), con plantilla operativa seleccionable (`General` o `Inmobiliaria`):
+    - modo `General`: playbook comercial, etiquetas sugeridas y atajos de etapa para ventas/servicios no inmobiliarios
+    - modo `Inmobiliaria`: ficha de lead (operacion, tipo de propiedad, zona, presupuesto, fuente, urgencia), etiquetas sugeridas y atajos especializados (`Nuevo`, `Contactado`, `Visita`, `Oferta`, `Cierre`)
+    - filtros de contactos por etapa operativa adaptados a la plantilla activa
+    - creacion de etapas personalizadas desde el panel (persistidas por workspace en storage local) y asignacion por tags del lead
     - recordatorio rapido de seguimiento en horas
     - seguimiento manual asistido con limite diario de cumplimiento (`20/dia`, solo inserta texto)
     - tablero de "leads calientes hoy" con acceso rapido a ficha
     - tutorial guiado con checklist persistente (storage local de extension)
     - dock lateral + tabs para navegar modulos del panel, con atajos operativos (guardar lead, insertar plantilla, seguimiento rapido)
     - panel arrastrable por la barra superior; doble clic para resetear posicion automatica
+    - modo privacidad `Blur demo` para ocultar chats/mensajes durante demos
+    - bloque `Copiloto asistido` (sugerir respuesta, resumir lead, siguiente accion y derivacion humana) sin auto-envio
   - Incluye `background service worker` para revisar recordatorios vencidos y emitir notificaciones de escritorio (sin auto-envio).
+  - Popup CRM agrega capacidades avanzadas sin romper contrato API:
+    - Kanban real con drag & drop por etapas (actualiza stage via `PATCH /api/v1/leads/:leadId/stage`)
+    - pestanas/segmentos personalizadas por workspace (filtros por tag, fuente, etapa, urgencia, agente)
+    - apertura de chat a numero no guardado (`web.whatsapp.com/send?phone=...`) con envio manual
+    - acceso directo a Google Calendar desde recordatorios (link prellenado)
+    - importacion CSV de contactos al CRM via `POST /api/v1/leads/upsert`
+    - selector de idioma en popup (`ES/EN/PT`)
 - Persistencia actual: Firestore (colecciones por modulo).
 - Runtime de despliegue: Vercel Serverless (`apps/api/src/vercel.ts` + `vercel.json`).
 

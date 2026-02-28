@@ -50,7 +50,11 @@ Proyecto: `whatsapp-crm-compliant`
   - Configuracion bloqueada a backend productivo (`https://whats-crm-compliant.vercel.app/api/v1`) para evitar errores por edicion manual.
   - Login/registro owner.
   - Panel embebido en `web.whatsapp.com` via content script (lead rapido, notas, recordatorios, insertar plantilla).
-  - Panel embebido con flujo inmobiliario: etiquetas sugeridas, atajos de pipeline, ficha de perfil y seguimiento rapido por horas.
+  - Panel embebido con selector de plantilla operativa por workspace (`General` o `Inmobiliaria`):
+    - `General`: playbook comercial, etiquetas sugeridas y atajos de pipeline para ventas/servicios generales.
+    - `Inmobiliaria`: etiquetas sugeridas, atajos de pipeline, ficha de perfil y seguimiento rapido por horas.
+  - Panel embebido agrega bloque `Contactos por etapa` con filtros operativos adaptados a la plantilla activa y lista clickeable de leads del workspace.
+  - Panel embebido permite crear etapas personalizadas (persistidas por workspace en storage local) y aplicarlas al lead actual sin romper las etapas core del backend.
   - Seguimiento manual asistido en panel embebido con limite diario local de cumplimiento (`20/dia`), siempre con envio manual.
   - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
   - Dock lateral con atajos operativos: guardar lead rapido, insertar plantilla y crear seguimiento rapido.
@@ -63,7 +67,14 @@ Proyecto: `whatsapp-crm-compliant`
   - Form/lista de plantillas.
   - Form de campana y envio.
   - Form/lista de recordatorios.
-  - Vista embudo por etapas.
+  - Vista embudo por etapas con Kanban drag & drop (mover leads entre columnas).
+  - Modulo `Pestanas personalizadas` en popup (segmentos por tag/fuente/etapa/urgencia/agente) persistido por workspace.
+  - Modulo `Numero no guardado` para abrir chat por E.164 con envio siempre manual.
+  - Modulo `Importar CSV a CRM` (upsert de leads por telefono via API, sin scraping de WhatsApp).
+  - Recordatorios en popup incluyen CTA a Google Calendar (link prellenado).
+  - Selector de idioma en popup (`ES/EN/PT`).
+  - Panel embebido incluye `Blur demo` para privacidad visual en demos.
+  - Panel embebido agrega `Copiloto asistido` (sugerencias/resumen/siguiente accion/derivacion), sin auto-envio.
 
 ## Estado
 
