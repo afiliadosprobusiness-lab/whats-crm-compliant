@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WhatsWidget",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "CRM ligero para leads y seguimiento comercial en WhatsApp Web con enfoque de cumplimiento.",
   "action": {
     "default_title": "WhatsWidget",

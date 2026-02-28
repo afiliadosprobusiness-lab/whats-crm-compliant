@@ -1,12 +1,14 @@
 #wacrm-root {
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  top: 72px;
+  bottom: auto;
   width: 368px;
   max-width: calc(100vw - 24px);
   z-index: 2147483646;
   font-family: "SF Pro Text", "Segoe UI", Arial, sans-serif;
   color: #0f1728;
+  color-scheme: light;
 }
 
 .wacrm-card {
@@ -114,6 +116,21 @@
   font-size: 12px;
   color: #1d2c3e;
   background: #ffffff;
+  color-scheme: light;
+}
+
+.wacrm-select {
+  appearance: auto;
+}
+
+.wacrm-select option {
+  background-color: #ffffff;
+  color: #10243a;
+}
+
+.wacrm-select option:checked {
+  background-color: #d8ebff;
+  color: #10395b;
 }
 
 .wacrm-textarea {
@@ -361,7 +378,8 @@
 @media (max-width: 768px) {
   #wacrm-root {
     right: 8px;
-    bottom: 8px;
+    top: 8px;
+    bottom: auto;
     width: min(360px, calc(100vw - 16px));
   }
 

@@ -18,7 +18,7 @@
   const FOLLOWUP_USAGE_RETENTION_DAYS = 45;
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
-  const CRM_BUILD_TAG = "0.4.5-2026-02-28";
+  const CRM_BUILD_TAG = "0.4.6-2026-02-28";
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const TUTORIAL_STEPS = [
     {
@@ -1471,16 +1471,47 @@
 
     state.syncTimer = window.setInterval(() => {
       renderChatInfo();
+      positionPanel();
       setModeState();
     }, 2500);
+
+    window.addEventListener("resize", positionPanel);
+  };
+
+  const positionPanel = () => {
+    const root = state.nodes.root;
+    if (!root) {
+      return;
+    }
+
+    const isMobile = window.matchMedia("(max-width: 768px)").matches;
+    if (isMobile) {
+      root.style.top = "8px";
+      root.style.bottom = "auto";
+      return;
+    }
+
+    const contactHeader =
+      document.querySelector("#main header") ||
+      document.querySelector("[data-testid='conversation-header']") ||
+      document.querySelector("header");
+
+    const fallbackTop = 72;
+    const headerTop = contactHeader instanceof HTMLElement ? Math.round(contactHeader.getBoundingClientRect().top + 8) : fallbackTop;
+    const computedTop = Number.isFinite(headerTop) ? Math.max(8, headerTop) : fallbackTop;
+
+    root.style.top = `${computedTop}px`;
+    root.style.bottom = "auto";
   };
 
   const init = async () => {
     createPanel();
     createDock();
+    positionPanel();
     setActiveSection(state.activeSection);
     await syncConfigFromStorage();
     renderChatInfo();
+    positionPanel();
     setModeState();
     updateLeadMeta();
     await withSyncGuard(fetchWorkspaceData);
