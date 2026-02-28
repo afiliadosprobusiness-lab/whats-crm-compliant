@@ -54,6 +54,7 @@ Proyecto: `whatsapp-crm-compliant`
     - `General`: playbook comercial, etiquetas sugeridas y atajos de pipeline para ventas/servicios generales.
     - `Inmobiliaria`: etiquetas sugeridas, atajos de pipeline, ficha de perfil y seguimiento rapido por horas.
   - Panel embebido agrega bloque `Contactos por etapa` con filtros operativos adaptados a la plantilla activa y lista clickeable de leads del workspace.
+  - Panel embebido incluye tab `CRM` con tablero Kanban (drag & drop) para mover leads entre etapas desde WhatsApp Web.
   - Panel embebido permite crear etapas personalizadas (persistidas por workspace en storage local) y aplicarlas al lead actual sin romper las etapas core del backend.
   - Seguimiento manual asistido en panel embebido con limite diario local de cumplimiento (`20/dia`), siempre con envio manual.
   - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.

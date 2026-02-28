@@ -22,6 +22,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - modo `General`: playbook comercial, etiquetas sugeridas y atajos de etapa para ventas/servicios no inmobiliarios
     - modo `Inmobiliaria`: ficha de lead (operacion, tipo de propiedad, zona, presupuesto, fuente, urgencia), etiquetas sugeridas y atajos especializados (`Nuevo`, `Contactado`, `Visita`, `Oferta`, `Cierre`)
     - filtros de contactos por etapa operativa adaptados a la plantilla activa
+    - tab `CRM` dentro del panel embebido con tablero Kanban (drag & drop) para mover leads entre etapas
     - creacion de etapas personalizadas desde el panel (persistidas por workspace en storage local) y asignacion por tags del lead
     - recordatorio rapido de seguimiento en horas
     - seguimiento manual asistido con limite diario de cumplimiento (`20/dia`, solo inserta texto)

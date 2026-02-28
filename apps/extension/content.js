@@ -836,7 +836,11 @@
     if (state.nodes.stageSelect) state.nodes.stageSelect.value = lead.stage || "new";
     if (state.nodes.consentSelect) state.nodes.consentSelect.value = lead.consentStatus || "pending";
     if (state.nodes.tagsInput) state.nodes.tagsInput.value = (lead.tags || []).join(", ");
-    fillProfileForm(parseProfileNote(lead));
+    if (state.templateMode === "real_estate") {
+      fillProfileForm(parseProfileNote(lead));
+    } else {
+      fillProfileForm(null);
+    }
     updateLeadMeta();
     setStatus(`Lead cargado: ${lead.name}.`);
   };
@@ -898,6 +902,7 @@
     const listEl = state.nodes.stageLeadsEl;
     const metaEl = state.nodes.stageFilterMetaEl;
     if (!listEl || !metaEl) {
+      renderCrmBoard();
       return;
     }
     const leads = getFilteredLeads();
@@ -911,6 +916,7 @@
       empty.className = "wacrm-meta";
       empty.textContent = "No hay contactos para esa etapa.";
       listEl.appendChild(empty);
+      renderCrmBoard();
       return;
     }
 
@@ -950,6 +956,120 @@
       row.appendChild(info);
       row.appendChild(actions);
       listEl.appendChild(row);
+    });
+    renderCrmBoard();
+  };
+
+  const renderCrmBoard = () => {
+    const boardEl = state.nodes.crmBoardEl;
+    if (!boardEl) {
+      return;
+    }
+
+    const stages = getPipelineStages();
+    const leads = Array.isArray(state.leads) ? state.leads : [];
+    boardEl.innerHTML = "";
+
+    if (!stages.length) {
+      const empty = document.createElement("p");
+      empty.className = "wacrm-meta";
+      empty.textContent = "No hay etapas disponibles para el tablero.";
+      boardEl.appendChild(empty);
+      return;
+    }
+
+    const sortedLeads = leads
+      .slice()
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+
+    stages.forEach((stage) => {
+      const column = document.createElement("section");
+      column.className = "wacrm-kanban-col";
+      column.dataset.stageKey = stage.key;
+
+      const stageLeads = sortedLeads.filter((lead) => getLeadPipelineStageKey(lead) === stage.key);
+      const header = document.createElement("div");
+      header.className = "wacrm-kanban-col-head";
+      header.innerHTML = `
+        <strong>${stage.label}</strong>
+        <span>${stageLeads.length}</span>
+      `;
+
+      const list = document.createElement("div");
+      list.className = "wacrm-kanban-list";
+      list.dataset.stageKey = stage.key;
+
+      list.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        list.classList.add("drop-target");
+      });
+      list.addEventListener("dragleave", () => {
+        list.classList.remove("drop-target");
+      });
+      list.addEventListener("drop", (event) => {
+        event.preventDefault();
+        list.classList.remove("drop-target");
+        const leadId = event.dataTransfer?.getData("text/plain") || "";
+        if (!leadId) {
+          return;
+        }
+        const lead = sortedLeads.find((item) => item.id === leadId);
+        if (!lead) {
+          return;
+        }
+        if (getLeadPipelineStageKey(lead) === stage.key) {
+          return;
+        }
+        void withSyncGuard(async () => {
+          await syncLeadPipelineStage(lead, stage.stage, stage.key, `Movido en tablero CRM a ${stage.label}.`);
+          setStatus(`Lead movido a ${stage.label}.`);
+          await fetchWorkspaceData();
+        });
+      });
+
+      if (!stageLeads.length) {
+        const empty = document.createElement("p");
+        empty.className = "wacrm-kanban-empty";
+        empty.textContent = "Sin contactos.";
+        list.appendChild(empty);
+      } else {
+        stageLeads.forEach((lead) => {
+          const card = document.createElement("article");
+          card.className = "wacrm-kanban-card";
+          card.draggable = true;
+          card.dataset.leadId = lead.id || "";
+          card.innerHTML = `
+            <button type="button" class="wacrm-kanban-title">${lead.name || "Sin nombre"}</button>
+            <p class="wacrm-kanban-meta">${lead.phoneE164 || "-"}</p>
+            <p class="wacrm-kanban-meta">${(Array.isArray(lead.tags) ? lead.tags.slice(0, 3) : []).join(", ") || "Sin tags"}</p>
+            <div class="wacrm-stage-actions">
+              <button type="button" class="wacrm-btn ghost wacrm-btn-xs wacrm-kanban-use">Usar</button>
+              <button type="button" class="wacrm-btn ghost wacrm-btn-xs wacrm-kanban-open">Abrir</button>
+            </div>
+          `;
+          card.addEventListener("dragstart", (event) => {
+            event.dataTransfer?.setData("text/plain", lead.id || "");
+            if (event.dataTransfer) {
+              event.dataTransfer.effectAllowed = "move";
+            }
+            card.classList.add("dragging");
+          });
+          card.addEventListener("dragend", () => {
+            card.classList.remove("dragging");
+          });
+          card.querySelector(".wacrm-kanban-title")?.addEventListener("click", () => {
+            fillLeadIntoForm(lead);
+            openSectionFromMenu("lead");
+          });
+          card.querySelector(".wacrm-kanban-use")?.addEventListener("click", () => fillLeadIntoForm(lead));
+          card.querySelector(".wacrm-kanban-open")?.addEventListener("click", () => openLeadChat(lead));
+          list.appendChild(card);
+        });
+      }
+
+      column.appendChild(header);
+      column.appendChild(list);
+      boardEl.appendChild(column);
     });
   };
 
@@ -1090,9 +1210,10 @@
   };
 
   const setActiveSection = (section) => {
-    const allowed = new Set(["overview", "lead", "actions", "tutorial", "all"]);
+    const allowed = new Set(["overview", "lead", "actions", "tutorial", "crm", "all"]);
     const nextSection = allowed.has(section) ? section : "overview";
     state.activeSection = nextSection;
+    state.nodes.root?.classList.toggle("wacrm-crm-mode", nextSection === "crm");
 
     const blocks = state.nodes.toolsEl?.querySelectorAll?.("[data-section]") || [];
     blocks.forEach((block) => {
@@ -1142,6 +1263,10 @@
     }
     if (action === "all") {
       openSectionFromMenu("all");
+      return;
+    }
+    if (action === "crm") {
+      openSectionFromMenu("crm");
       return;
     }
     if (action === "save-lead") {
@@ -1841,6 +1966,7 @@
         <button type="button" class="wacrm-dock-item" data-action="save-lead" data-section="lead" title="Guardar lead del chat actual">L</button>
         <button type="button" class="wacrm-dock-item" data-action="insert-template" data-section="actions" title="Insertar plantilla seleccionada">A</button>
         <button type="button" class="wacrm-dock-item" data-action="quick-followup" data-section="actions" title="Crear seguimiento rapido (24h)">S</button>
+        <button type="button" class="wacrm-dock-item" data-action="crm" data-section="crm" title="Vista CRM Kanban">K</button>
         <button type="button" class="wacrm-dock-item" data-action="tutorial" data-section="tutorial" title="Tutorial">T</button>
         <button type="button" class="wacrm-dock-item" data-action="all" data-section="all" title="Ver todo el panel">+</button>
       </div>
@@ -1882,6 +2008,7 @@
             <button type="button" class="wacrm-tab active" data-section="overview">Inicio</button>
             <button type="button" class="wacrm-tab" data-section="lead">Leads</button>
             <button type="button" class="wacrm-tab" data-section="actions">Acciones</button>
+            <button type="button" class="wacrm-tab" data-section="crm">CRM</button>
             <button type="button" class="wacrm-tab" data-section="tutorial">Tutorial</button>
           </div>
           <div class="wacrm-block" id="wacrm-gate"></div>
@@ -1903,6 +2030,11 @@
               <h4>Leads calientes hoy</h4>
               <p class="wacrm-meta" id="wacrm-hot-meta">Sin leads calientes hoy.</p>
               <div class="wacrm-hot-list" id="wacrm-hot-leads"></div>
+            </div>
+            <div class="wacrm-block" data-section="crm">
+              <h4>CRM Kanban</h4>
+              <p class="wacrm-meta">Arrastra leads entre columnas para mover su etapa.</p>
+              <div class="wacrm-kanban-board" id="wacrm-kanban-board"></div>
             </div>
             <div class="wacrm-block" data-section="overview,lead">
               <h4>Contactos por etapa</h4>
@@ -2067,6 +2199,7 @@
     state.nodes.tutorialListEl = root.querySelector("#wacrm-tutorial-list");
     state.nodes.hotLeadsMetaEl = root.querySelector("#wacrm-hot-meta");
     state.nodes.hotLeadsEl = root.querySelector("#wacrm-hot-leads");
+    state.nodes.crmBoardEl = root.querySelector("#wacrm-kanban-board");
     state.nodes.stageFiltersEl = root.querySelector("#wacrm-stage-filters");
     state.nodes.stageFilterMetaEl = root.querySelector("#wacrm-stage-filter-meta");
     state.nodes.stageLeadsEl = root.querySelector("#wacrm-stage-leads");
