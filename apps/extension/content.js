@@ -139,7 +139,25 @@
     ],
   };
 
-  const hasChromeStorage = typeof chrome !== "undefined" && Boolean(chrome.storage?.local);
+  const getChromeApi = () => {
+    try {
+      if (typeof chrome === "undefined") {
+        return null;
+      }
+      return chrome;
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const hasChromeStorage = () => {
+    const chromeApi = getChromeApi();
+    try {
+      return Boolean(chromeApi?.storage?.local);
+    } catch (_error) {
+      return false;
+    }
+  };
   const state = {
     apiBaseUrl: DEFAULT_API_BASE_URL,
     token: "",
@@ -169,8 +187,9 @@
   };
 
   const isExtensionContextAlive = () => {
+    const chromeApi = getChromeApi();
     try {
-      return typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
+      return Boolean(chromeApi?.runtime?.id);
     } catch (_error) {
       return false;
     }
@@ -196,15 +215,16 @@
   });
 
   const storageGet = async (keys) => {
-    if (!hasChromeStorage || !isExtensionContextAlive()) {
+    if (!hasChromeStorage() || !isExtensionContextAlive()) {
       return {};
     }
 
     return new Promise((resolve) => {
+      const chromeApi = getChromeApi();
       try {
-        chrome.storage.local.get(keys, (result) => {
+        chromeApi?.storage?.local?.get?.(keys, (result) => {
           try {
-            if (chrome.runtime?.lastError) {
+            if (chromeApi?.runtime?.lastError) {
               resolve({});
               return;
             }
@@ -264,13 +284,14 @@
   };
 
   const storageSet = async (payload) => {
-    if (!hasChromeStorage || !isExtensionContextAlive()) {
+    if (!hasChromeStorage() || !isExtensionContextAlive()) {
       return;
     }
 
     await new Promise((resolve) => {
+      const chromeApi = getChromeApi();
       try {
-        chrome.storage.local.set(payload, () => resolve());
+        chromeApi?.storage?.local?.set?.(payload, () => resolve());
       } catch (_error) {
         resolve();
       }
@@ -2436,10 +2457,11 @@
   };
 
   const startWatchers = () => {
-    if (hasChromeStorage && isExtensionContextAlive() && chrome.storage?.onChanged) {
+    const chromeApi = getChromeApi();
+    if (hasChromeStorage() && isExtensionContextAlive() && chromeApi?.storage?.onChanged) {
       try {
-        chrome.storage.onChanged.addListener((changes, areaName) => {
-          if (chrome.runtime?.lastError) {
+        chromeApi.storage.onChanged.addListener((changes, areaName) => {
+          if (chromeApi?.runtime?.lastError) {
             return;
           }
           if (areaName !== "local") {
