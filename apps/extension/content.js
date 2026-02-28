@@ -168,13 +168,47 @@
     nodes: {},
   };
 
+  const isExtensionContextAlive = () => {
+    try {
+      return typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
+    } catch (_error) {
+      return false;
+    }
+  };
+
+  const isInvalidatedContextError = (errorOrMessage) => {
+    const raw = typeof errorOrMessage === "string"
+      ? errorOrMessage
+      : String(errorOrMessage?.message || errorOrMessage || "");
+    return raw.toLowerCase().includes("extension context invalidated");
+  };
+
   const storageGet = async (keys) => {
-    if (!hasChromeStorage) {
+    if (!hasChromeStorage || !isExtensionContextAlive()) {
       return {};
     }
 
     return new Promise((resolve) => {
-      chrome.storage.local.get(keys, (result) => resolve(result || {}));
+      try {
+        chrome.storage.local.get(keys, (result) => {
+          try {
+            if (chrome.runtime?.lastError) {
+              resolve({});
+              return;
+            }
+          } catch (_error) {
+            resolve({});
+            return;
+          }
+          resolve(result || {});
+        });
+      } catch (error) {
+        if (isInvalidatedContextError(error)) {
+          resolve({});
+          return;
+        }
+        resolve({});
+      }
     });
   };
 
@@ -218,12 +252,16 @@
   };
 
   const storageSet = async (payload) => {
-    if (!hasChromeStorage) {
+    if (!hasChromeStorage || !isExtensionContextAlive()) {
       return;
     }
 
     await new Promise((resolve) => {
-      chrome.storage.local.set(payload, resolve);
+      try {
+        chrome.storage.local.set(payload, () => resolve());
+      } catch (_error) {
+        resolve();
+      }
     });
   };
 
@@ -2386,54 +2424,68 @@
   };
 
   const startWatchers = () => {
-    if (hasChromeStorage && chrome.storage.onChanged) {
-      chrome.storage.onChanged.addListener((changes, areaName) => {
-        if (areaName !== "local") {
-          return;
-        }
+    if (hasChromeStorage && isExtensionContextAlive() && chrome.storage?.onChanged) {
+      try {
+        chrome.storage.onChanged.addListener((changes, areaName) => {
+          if (chrome.runtime?.lastError) {
+            return;
+          }
+          if (areaName !== "local") {
+            return;
+          }
 
-        let mustReload = false;
-        if (changes.crm_api_base_url) {
-          state.apiBaseUrl = String(changes.crm_api_base_url.newValue || "").trim() || DEFAULT_API_BASE_URL;
-          mustReload = true;
-        }
-        if (changes.crm_token) {
-          state.token = String(changes.crm_token.newValue || "").trim();
-          mustReload = true;
-        }
-        if (changes[PANEL_POSITION_KEY]) {
-          state.panelPosition = normalizePanelPosition(changes[PANEL_POSITION_KEY].newValue);
-          positionPanel();
-        }
-        if (changes[CUSTOM_STAGES_KEY]) {
-          state.customStageStore = normalizeCustomStageStore(changes[CUSTOM_STAGES_KEY].newValue);
-          applyWorkspaceCustomStages();
-          renderCustomStageMeta();
-          renderStageShortcuts();
-          renderStageFilters();
-          renderStageLeads();
-        }
-        if (changes[TEMPLATE_MODE_KEY]) {
-          state.templateModeStore = normalizeTemplateModeStore(changes[TEMPLATE_MODE_KEY].newValue);
-          applyWorkspaceTemplateMode();
-          applyTemplateModeUI();
-          renderTagSuggestions();
-          renderStageShortcuts();
-          renderStageFilters();
-          renderStageLeads();
-        }
-        if (changes[BLUR_MODE_KEY]) {
-          state.blurMode = Boolean(changes[BLUR_MODE_KEY].newValue);
-          applyBlurMode();
-        }
+          let mustReload = false;
+          if (changes.crm_api_base_url) {
+            state.apiBaseUrl = String(changes.crm_api_base_url.newValue || "").trim() || DEFAULT_API_BASE_URL;
+            mustReload = true;
+          }
+          if (changes.crm_token) {
+            state.token = String(changes.crm_token.newValue || "").trim();
+            mustReload = true;
+          }
+          if (changes[PANEL_POSITION_KEY]) {
+            state.panelPosition = normalizePanelPosition(changes[PANEL_POSITION_KEY].newValue);
+            positionPanel();
+          }
+          if (changes[CUSTOM_STAGES_KEY]) {
+            state.customStageStore = normalizeCustomStageStore(changes[CUSTOM_STAGES_KEY].newValue);
+            applyWorkspaceCustomStages();
+            renderCustomStageMeta();
+            renderStageShortcuts();
+            renderStageFilters();
+            renderStageLeads();
+          }
+          if (changes[TEMPLATE_MODE_KEY]) {
+            state.templateModeStore = normalizeTemplateModeStore(changes[TEMPLATE_MODE_KEY].newValue);
+            applyWorkspaceTemplateMode();
+            applyTemplateModeUI();
+            renderTagSuggestions();
+            renderStageShortcuts();
+            renderStageFilters();
+            renderStageLeads();
+          }
+          if (changes[BLUR_MODE_KEY]) {
+            state.blurMode = Boolean(changes[BLUR_MODE_KEY].newValue);
+            applyBlurMode();
+          }
 
-        if (mustReload) {
-          void withSyncGuard(fetchWorkspaceData);
-        }
-      });
+          if (mustReload) {
+            void withSyncGuard(fetchWorkspaceData);
+          }
+        });
+      } catch (_error) {
+        // Ignore storage watcher wiring errors when extension context is being reloaded.
+      }
     }
 
     state.syncTimer = window.setInterval(() => {
+      if (!isExtensionContextAlive()) {
+        if (state.syncTimer) {
+          window.clearInterval(state.syncTimer);
+          state.syncTimer = null;
+        }
+        return;
+      }
       renderChatInfo();
       positionPanel();
       setModeState();

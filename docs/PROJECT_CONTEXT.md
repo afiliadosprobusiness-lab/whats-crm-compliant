@@ -56,6 +56,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido agrega bloque `Contactos por etapa` con filtros operativos adaptados a la plantilla activa y lista clickeable de leads del workspace.
   - Panel embebido incluye tab `CRM` con tablero Kanban (drag & drop) para mover leads entre etapas desde WhatsApp Web.
   - Panel embebido permite crear etapas personalizadas (persistidas por workspace en storage local) y aplicarlas al lead actual sin romper las etapas core del backend.
+  - Panel embebido incluye guardas para `Extension context invalidated` durante recarga/update de extension (no rompe la UI).
   - Seguimiento manual asistido en panel embebido con limite diario local de cumplimiento (`20/dia`), siempre con envio manual.
   - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
   - Dock lateral con atajos operativos: guardar lead rapido, insertar plantilla y crear seguimiento rapido.

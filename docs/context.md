@@ -24,6 +24,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - filtros de contactos por etapa operativa adaptados a la plantilla activa
     - tab `CRM` dentro del panel embebido con tablero Kanban (drag & drop) para mover leads entre etapas
     - creacion de etapas personalizadas desde el panel (persistidas por workspace en storage local) y asignacion por tags del lead
+    - manejo defensivo de recarga de extension: evita crash del panel cuando Chrome invalida contexto durante update/reload
     - recordatorio rapido de seguimiento en horas
     - seguimiento manual asistido con limite diario de cumplimiento (`20/dia`, solo inserta texto)
     - tablero de "leads calientes hoy" con acceso rapido a ficha
