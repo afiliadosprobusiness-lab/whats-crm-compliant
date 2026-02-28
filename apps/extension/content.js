@@ -90,7 +90,7 @@
   const RESERVED_STAGE_KEYS = Array.from(
     new Set(
       Object.values(STAGE_SHORTCUTS_BY_TEMPLATE)
-        .flat()
+        .reduce((acc, list) => acc.concat(Array.isArray(list) ? list : []), [])
         .map((shortcut) => shortcut.key)
     )
   );
@@ -363,11 +363,20 @@
 
   const mergeTags = (...tagLists) => {
     const unique = new Set();
-    tagLists.flat().forEach((tag) => {
-      const clean = slugTag(tag);
-      if (clean) {
-        unique.add(clean);
+    tagLists.forEach((list) => {
+      if (!Array.isArray(list)) {
+        const clean = slugTag(list);
+        if (clean) {
+          unique.add(clean);
+        }
+        return;
       }
+      list.forEach((tag) => {
+        const clean = slugTag(tag);
+        if (clean) {
+          unique.add(clean);
+        }
+      });
     });
     return Array.from(unique).slice(0, 8);
   };
