@@ -1924,6 +1924,7 @@
     const hoursRaw = Number.parseInt(String(state.nodes.followupHoursInput?.value || "24"), 10);
     const hours = Number.isNaN(hoursRaw) ? 24 : Math.max(1, Math.min(720, hoursRaw));
     const dueAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+    const noteLabel = state.templateMode === "real_estate" ? "Seguimiento inmobiliario" : "Seguimiento comercial";
     if (state.nodes.followupHoursInput) {
       state.nodes.followupHoursInput.value = String(hours);
     }
@@ -1932,7 +1933,7 @@
       method: "POST",
       body: JSON.stringify({
         leadId: lead.id,
-        note: `Seguimiento inmobiliario (${hours}h)`,
+        note: `${noteLabel} (${hours}h)`,
         dueAt,
       }),
     });

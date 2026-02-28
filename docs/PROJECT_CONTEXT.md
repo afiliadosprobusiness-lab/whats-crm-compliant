@@ -73,6 +73,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Modulo `Numero no guardado` para abrir chat por E.164 con envio siempre manual.
   - Modulo `Importar CSV a CRM` (upsert de leads por telefono via API, sin scraping de WhatsApp).
   - Recordatorios en popup incluyen CTA a Google Calendar (link prellenado).
+  - Popup endurece validaciones: campanas solo con seleccion valida de leads `opted_in` y recordatorios requieren fecha/hora valida.
   - Selector de idioma en popup (`ES/EN/PT`).
   - Panel embebido incluye `Blur demo` para privacidad visual en demos.
   - Panel embebido agrega `Copiloto asistido` (sugerencias/resumen/siguiente accion/derivacion), sin auto-envio.

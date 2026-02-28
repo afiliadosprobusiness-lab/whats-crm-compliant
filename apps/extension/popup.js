@@ -61,6 +61,8 @@ const I18N = {
     template_saved: "Template saved.",
     campaign_sent: "Campaign sent.",
     reminder_created: "Reminder created.",
+    campaign_recipients_required: "Select at least one opted_in lead.",
+    reminder_invalid_date: "Invalid date/time for reminder.",
     csv_processing: "Importing CSV...",
     csv_no_rows: "CSV has no valid rows.",
     csv_import_result: "CSV import completed.",
@@ -121,6 +123,8 @@ const I18N = {
     template_saved: "Modelo salvo.",
     campaign_sent: "Campanha enviada.",
     reminder_created: "Lembrete criado.",
+    campaign_recipients_required: "Selecione pelo menos um lead opted_in.",
+    reminder_invalid_date: "Data/hora invalida para lembrete.",
     csv_processing: "Importando CSV...",
     csv_no_rows: "CSV sem linhas validas.",
     csv_import_result: "Importacao CSV concluida.",
@@ -981,16 +985,22 @@ document.getElementById("campaign-form").addEventListener("submit", async (event
   const recipientLeadIds = Array.from(document.querySelectorAll("input[name='recipientLeadId']:checked")).map(
     (checkbox) => checkbox.value,
   );
+  const optedInLeadIds = new Set(
+    state.leads
+      .filter((lead) => lead.consentStatus === "opted_in")
+      .map((lead) => String(lead.id || "")),
+  );
+  const safeRecipientLeadIds = recipientLeadIds.filter((leadId) => optedInLeadIds.has(String(leadId || "")));
 
-  if (recipientLeadIds.length === 0) {
-    setFeedback("Select at least one lead.", true);
+  if (safeRecipientLeadIds.length === 0) {
+    setFeedback(tr("campaign_recipients_required", "Selecciona al menos un lead opted_in."), true);
     return;
   }
 
   const payload = {
     name: String(data.get("name") || "").trim(),
     templateId: String(data.get("templateId") || "").trim(),
-    recipientLeadIds,
+    recipientLeadIds: safeRecipientLeadIds,
   };
 
   try {
@@ -1016,11 +1026,16 @@ document.getElementById("reminder-form").addEventListener("submit", async (event
   const form = event.currentTarget;
   const data = new FormData(form);
   const dueAtRaw = String(data.get("dueAt") || "").trim();
+  const dueAtDate = new Date(dueAtRaw);
+  if (!dueAtRaw || Number.isNaN(dueAtDate.getTime())) {
+    setFeedback(tr("reminder_invalid_date", "Fecha/hora invalida para recordatorio."), true);
+    return;
+  }
 
   const payload = {
     leadId: String(data.get("leadId") || "").trim(),
     note: String(data.get("note") || "").trim(),
-    dueAt: new Date(dueAtRaw).toISOString(),
+    dueAt: dueAtDate.toISOString(),
   };
 
   try {

@@ -38,6 +38,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - pestanas/segmentos personalizadas por workspace (filtros por tag, fuente, etapa, urgencia, agente)
     - apertura de chat a numero no guardado (`web.whatsapp.com/send?phone=...`) con envio manual
     - acceso directo a Google Calendar desde recordatorios (link prellenado)
+    - validaciones operativas en popup: campanas solo con destinatarios `opted_in` y recordatorios con fecha/hora valida
     - importacion CSV de contactos al CRM via `POST /api/v1/leads/upsert`
     - selector de idioma en popup (`ES/EN/PT`)
 - Persistencia actual: Firestore (colecciones por modulo).
