@@ -44,6 +44,16 @@
   const VIEW_REFRESH_TICK_MS = 2500;
   const WORKSPACE_AUTOSYNC_ACTIVE_MS = 12000;
   const WORKSPACE_AUTOSYNC_IDLE_MS = 30000;
+  const QUICK_ACTION_HELP = {
+    "save-lead": "Guardar: completa Nombre + Telefono E.164 para crear/actualizar el lead.",
+    "copilot-summary": "Resumen: genera un resumen del lead actual.",
+    "open-crm": "CRM: abre el panel completo con Kanban, inbox y productividad.",
+    "insert-template": "Plantilla: inserta una plantilla en el chat. El envio final siempre es manual.",
+    "copilot-reply": "Sugerir + insertar: genera texto con Copiloto e inserta en el chat.",
+    "insert-followup": "Seguimiento: inserta texto de seguimiento manual. Requiere lead guardado.",
+    "quick-followup": "Recordatorio +24h: crea recordatorio rapido. Requiere lead guardado.",
+  };
+  const LEAD_REQUIRED_ACTIONS = new Set(["copilot-summary", "copilot-reply", "insert-followup", "quick-followup"]);
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const PANEL_POSITION_KEY = "crm_panel_position_v1";
   const CUSTOM_STAGES_KEY = "crm_custom_stages_v1";
@@ -1683,14 +1693,67 @@
     });
   };
 
+  const getQuickActionHelpText = (action) => {
+    const key = String(action || "").trim();
+    return QUICK_ACTION_HELP[key] || "Selecciona una accion para ver la guia rapida.";
+  };
+
+  const renderQuickBarHelp = (container, action = "") => {
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
+    const helpEl = container.querySelector("[data-wacrm-help]");
+    if (!(helpEl instanceof HTMLElement)) {
+      return;
+    }
+    helpEl.textContent = getQuickActionHelpText(action);
+  };
+
+  const getLeadPrerequisiteHint = () => {
+    return "Paso 1: abre una conversacion. Paso 2: completa Nombre + Telefono E.164. Paso 3: pulsa Guardar lead.";
+  };
+
+  const getQuickActionGuardMessage = (action) => {
+    const key = String(action || "").trim();
+    if (!key) {
+      return "";
+    }
+    if (key === "open-crm") {
+      return "";
+    }
+    if (!getWhatsAppLoggedIn()) {
+      return "Inicia sesion en WhatsApp Web para usar atajos CRM.";
+    }
+    if (!state.token) {
+      return "Inicia sesion en la extension para usar atajos CRM.";
+    }
+    if (!state.canUseCrm) {
+      return "Suscripcion inactiva. Los atajos CRM estan bloqueados.";
+    }
+    if (!state.currentChat) {
+      return "Abre una conversacion para usar atajos CRM.";
+    }
+    if (key === "insert-template" && state.templates.length === 0) {
+      return "No hay plantillas. Crea una en el popup > Plantillas y vuelve a intentar.";
+    }
+    if (LEAD_REQUIRED_ACTIONS.has(key) && !state.currentLead) {
+      const name = String(state.nodes.nameInput?.value || "").trim();
+      const phone = normalizePhone(state.nodes.phoneInput?.value || "");
+      if (!name || !phone) {
+        return `Esta accion requiere lead guardado. ${getLeadPrerequisiteHint()}`;
+      }
+    }
+    return "";
+  };
+
   const getQuickLeadLabel = () => {
     if (state.currentLead) {
       const leadName = String(state.currentLead.name || "Lead").trim().slice(0, 28);
       const stageLabel = getLeadPipelineLabel(state.currentLead);
-      return `${leadName} · ${stageLabel}`;
+      return `${leadName} - ${stageLabel}`;
     }
     if (state.currentChat?.name) {
-      return `${String(state.currentChat.name || "Chat").trim().slice(0, 28)} · sin lead`;
+      return `${String(state.currentChat.name || "Chat").trim().slice(0, 28)} - sin lead`;
     }
     return "Sin conversacion activa";
   };
@@ -1727,25 +1790,14 @@
       return;
     }
 
-    if (normalizedAction === "open-crm") {
-      openSectionFromMenu("crm");
+    const guardMessage = getQuickActionGuardMessage(normalizedAction);
+    if (guardMessage) {
+      setStatus(guardMessage, true);
       return;
     }
 
-    if (!getWhatsAppLoggedIn()) {
-      setStatus("Inicia sesion en WhatsApp Web para usar atajos CRM.", true);
-      return;
-    }
-    if (!state.token) {
-      setStatus("Inicia sesion en la extension para usar atajos CRM.", true);
-      return;
-    }
-    if (!state.canUseCrm) {
-      setStatus("Suscripcion inactiva. Los atajos CRM estan bloqueados.", true);
-      return;
-    }
-    if (!state.currentChat) {
-      setStatus("Abre una conversacion para usar atajos CRM.", true);
+    if (normalizedAction === "open-crm") {
+      openSectionFromMenu("crm");
       return;
     }
 
@@ -1793,6 +1845,7 @@
       return;
     }
     container.dataset.boundActions = "1";
+    renderQuickBarHelp(container, "");
     container.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) {
@@ -1804,11 +1857,36 @@
       }
       runNativeQuickAction(button.dataset.wacrmAction);
     });
+    container.addEventListener("mouseover", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const button = target.closest("button[data-wacrm-action]");
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      renderQuickBarHelp(container, button.dataset.wacrmAction);
+    });
+    container.addEventListener("focusin", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const button = target.closest("button[data-wacrm-action]");
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      renderQuickBarHelp(container, button.dataset.wacrmAction);
+    });
+    container.addEventListener("mouseleave", () => {
+      renderQuickBarHelp(container, "");
+    });
   };
 
   const ensureTopQuickBar = () => {
-    const header = getConversationHeaderEl();
-    if (!(header instanceof HTMLElement)) {
+    const host = getComposerHostEl();
+    if (!(host instanceof HTMLElement)) {
       state.nodes.waTopBar?.remove();
       state.nodes.waTopBar = null;
       return null;
@@ -1820,7 +1898,7 @@
       bar.id = WA_TOP_BAR_ID;
       bar.className = "wacrm-wa-bar";
       bar.setAttribute("role", "region");
-      bar.setAttribute("aria-label", "Atajos CRM en cabecera");
+      bar.setAttribute("aria-label", "Estado rapido CRM en caja de mensaje");
       bar.innerHTML = `
         <div class="wacrm-wa-chip-row">
           <span class="wacrm-wa-pill" data-wacrm-lead>Sin conversacion activa</span>
@@ -1832,12 +1910,27 @@
           <button type="button" class="wacrm-wa-btn" data-wacrm-action="copilot-summary">Resumen</button>
           <button type="button" class="wacrm-wa-btn" data-wacrm-action="open-crm">CRM</button>
         </div>
+        <p class="wacrm-wa-help" data-wacrm-help>Selecciona una accion para ver la guia rapida.</p>
       `;
       bindQuickBarActions(bar);
       state.nodes.waTopBar = bar;
     }
 
-    header.insertAdjacentElement("afterend", bar);
+    if (host.parentElement instanceof HTMLElement) {
+      const parent = host.parentElement;
+      const composerBar = state.nodes.waComposerBar;
+      if (composerBar instanceof HTMLElement && composerBar.parentElement === parent) {
+        if (bar.parentElement !== parent || bar.nextElementSibling !== composerBar) {
+          parent.insertBefore(bar, composerBar);
+        }
+      } else if (host.previousElementSibling !== bar || bar.parentElement !== parent) {
+        parent.insertBefore(bar, host);
+      }
+    } else {
+      bar.remove();
+      state.nodes.waTopBar = null;
+      return null;
+    }
     return bar;
   };
 
@@ -1864,6 +1957,7 @@
           <button type="button" class="wacrm-wa-btn" data-wacrm-action="quick-followup">Recordatorio +24h</button>
         </div>
         <p class="wacrm-wa-hint" data-wacrm-hint>Inserta texto y envia manualmente.</p>
+        <p class="wacrm-wa-help" data-wacrm-help>Selecciona una accion para ver la guia rapida.</p>
       `;
       bindQuickBarActions(bar);
       state.nodes.waComposerBar = bar;
@@ -1921,6 +2015,8 @@
           hintEl.textContent = "Abre una conversacion para usar atajos.";
         } else if (state.syncing) {
           hintEl.textContent = "Sincronizando datos CRM...";
+        } else if (!state.currentLead) {
+          hintEl.textContent = "Tip: para Seguimiento y Recordatorio +24h primero guarda el lead (Nombre + Telefono).";
         } else {
           hintEl.textContent = "Inserta texto y confirma envio manual en WhatsApp.";
         }
@@ -2559,7 +2655,7 @@
     const intro = reminderText
       ? `te escribo para ${reminderText.toLowerCase()}.`
       : "te escribo para dar seguimiento a tu consulta.";
-    return `Hola ${contactName}, ${intro} ¿Te viene bien continuar hoy por este medio?`;
+    return `Hola ${contactName}, ${intro} Te viene bien continuar hoy por este medio?`;
   };
 
   const refreshFollowupMeta = async () => {
@@ -2670,9 +2766,15 @@
       return state.currentLead;
     }
 
+    const name = String(state.nodes.nameInput?.value || "").trim();
+    const phone = normalizePhone(state.nodes.phoneInput?.value || "");
+    if (!name || !phone) {
+      throw new Error(`Para continuar necesitas un lead guardado. ${getLeadPrerequisiteHint()}`);
+    }
+
     await saveLead();
     if (!state.currentLead) {
-      throw new Error("No hay lead asociado al chat actual.");
+      throw new Error("No se pudo asociar un lead al chat actual. Revisa nombre/telefono e intenta de nuevo.");
     }
 
     return state.currentLead;
@@ -3427,3 +3529,4 @@
     console.warn("[WACRM] init failed:", error?.message || error);
   });
 })();
+
