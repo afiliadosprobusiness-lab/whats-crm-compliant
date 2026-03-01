@@ -91,14 +91,16 @@ html.wacrm-blur-mode #wacrm-dock {
 
 .wacrm-wa-bar {
   margin: 6px 8px 4px;
-  border: 1px solid rgb(255 255 255 / 55%);
+  border: 1px solid rgb(138 187 232 / 72%);
   border-radius: 10px;
   padding: 6px 8px;
-  background: linear-gradient(180deg, rgb(248 252 255 / 78%), rgb(240 246 253 / 72%));
+  background: linear-gradient(135deg, rgb(213 239 255 / 86%), rgb(214 232 255 / 79%), rgb(229 239 255 / 80%));
   box-shadow:
-    0 10px 20px rgb(0 10 30 / 14%),
+    0 10px 20px rgb(0 25 55 / 18%),
     inset 0 1px 0 rgb(255 255 255 / 68%);
   backdrop-filter: blur(16px) saturate(1.35);
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -108,10 +110,23 @@ html.wacrm-blur-mode #wacrm-dock {
   gap: 6px 8px;
 }
 
+.wacrm-wa-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgb(28 133 214 / 92%), rgb(65 176 228 / 90%), rgb(155 219 255 / 84%));
+  pointer-events: none;
+}
+
 .wacrm-wa-bar-composer {
   margin: 4px 8px 6px;
-  border-color: rgb(236 246 238 / 74%);
-  background: linear-gradient(180deg, rgb(244 252 246 / 82%), rgb(234 247 238 / 75%));
+  border-color: rgb(138 213 174 / 75%);
+  background: linear-gradient(135deg, rgb(222 251 238 / 86%), rgb(206 245 230 / 82%), rgb(221 251 242 / 80%));
+}
+
+.wacrm-wa-bar-composer::before {
+  background: linear-gradient(90deg, rgb(15 154 95 / 90%), rgb(61 191 139 / 88%), rgb(145 233 191 / 82%));
 }
 
 .wacrm-wa-bar.is-disabled {
@@ -126,9 +141,9 @@ html.wacrm-blur-mode #wacrm-dock {
 }
 
 .wacrm-wa-pill {
-  border: 1px solid rgb(191 211 230 / 62%);
-  background: rgb(232 242 253 / 74%);
-  color: #2a506f;
+  border: 1px solid rgb(133 180 219 / 72%);
+  background: rgb(223 240 255 / 88%);
+  color: #174f78;
   border-radius: 999px;
   font-size: 10px;
   line-height: 1.2;
@@ -140,9 +155,9 @@ html.wacrm-blur-mode #wacrm-dock {
 }
 
 .wacrm-wa-pill.subtle {
-  border-color: rgb(205 220 234 / 66%);
-  background: rgb(243 247 252 / 75%);
-  color: #45607a;
+  border-color: rgb(158 198 232 / 68%);
+  background: rgb(234 244 255 / 82%);
+  color: #2f6289;
 }
 
 .wacrm-wa-actions {
@@ -153,9 +168,9 @@ html.wacrm-blur-mode #wacrm-dock {
 }
 
 .wacrm-wa-btn {
-  border: 1px solid rgb(184 205 225 / 78%);
-  background: linear-gradient(180deg, #ffffff, #eef5fb);
-  color: #1f4c6d;
+  border: 1px solid rgb(115 167 209 / 75%);
+  background: linear-gradient(180deg, #ffffff, #e8f5ff);
+  color: #15557f;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
@@ -172,9 +187,9 @@ html.wacrm-blur-mode #wacrm-dock {
 }
 
 .wacrm-wa-btn:hover {
-  background: linear-gradient(180deg, #ffffff, #e6f1fa);
-  border-color: #7fa8c9;
-  box-shadow: 0 4px 9px rgb(25 62 97 / 18%);
+  background: linear-gradient(180deg, #ffffff, #dcf0ff);
+  border-color: #4f9ed8;
+  box-shadow: 0 4px 9px rgb(11 76 123 / 24%);
 }
 
 .wacrm-wa-btn:active {
@@ -194,14 +209,14 @@ html.wacrm-blur-mode #wacrm-dock {
 .wacrm-wa-hint {
   margin: 0;
   font-size: 10px;
-  color: #4b6a58;
+  color: #1f5c3e;
   flex: 1 1 100%;
 }
 
 .wacrm-wa-help {
   margin: 0;
   font-size: 10px;
-  color: #36536a;
+  color: #19557d;
   flex: 1 1 100%;
 }
 
@@ -618,31 +633,49 @@ html.wacrm-blur-mode #wacrm-dock {
   top: 252px;
   z-index: 2147483645;
   display: grid;
-  gap: 6px;
+  gap: 7px;
 }
 
 .wacrm-dock-toggle {
-  width: 58px;
+  width: 60px;
   height: 40px;
-  border: 1px solid rgb(255 255 255 / 54%);
-  border-radius: 12px;
-  background: linear-gradient(170deg, rgb(248 252 255 / 84%), rgb(236 244 252 / 78%));
-  color: #2b5a7c;
+  border: 1px solid rgb(110 193 248 / 66%);
+  border-radius: 13px;
+  background: linear-gradient(170deg, rgb(236 248 255 / 92%), rgb(207 233 252 / 84%));
+  color: #1d5a83;
   font-size: 11px;
   font-weight: 700;
   box-shadow:
-    0 10px 22px rgb(8 18 30 / 20%),
+    0 10px 22px rgb(8 28 45 / 25%),
     inset 0 1px 0 rgb(255 255 255 / 72%);
-  backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.25);
   cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 160ms ease;
 }
 
 .wacrm-dock-menu {
   display: none;
   gap: 5px;
+  border: 1px solid rgb(255 255 255 / 34%);
+  border-radius: 14px;
+  padding: 7px 6px;
+  background: linear-gradient(170deg, rgb(20 26 36 / 66%), rgb(14 18 28 / 62%));
+  box-shadow:
+    0 14px 28px rgb(4 10 18 / 38%),
+    inset 0 1px 0 rgb(255 255 255 / 10%);
+  backdrop-filter: blur(14px) saturate(1.15);
 }
 
 #wacrm-dock.open .wacrm-dock-menu {
+  display: grid;
+}
+
+.wacrm-dock-secondary {
+  display: none;
+  gap: 5px;
+}
+
+#wacrm-dock.open .wacrm-dock-menu.show-secondary .wacrm-dock-secondary {
   display: grid;
 }
 
@@ -664,17 +697,45 @@ html.wacrm-blur-mode #wacrm-dock {
   cursor: pointer;
   text-align: center;
   letter-spacing: 0.01em;
+  transition: transform 120ms ease, box-shadow 150ms ease, filter 150ms ease;
+}
+
+.wacrm-dock-item.is-primary {
+  border-color: rgb(137 191 235 / 88%);
+  background: linear-gradient(180deg, rgb(240 250 255 / 94%), rgb(212 236 255 / 90%));
+  color: #145a86;
+}
+
+.wacrm-dock-item.is-secondary {
+  border-color: rgb(168 190 210 / 72%);
+  background: linear-gradient(180deg, rgb(249 252 255 / 90%), rgb(232 242 252 / 86%));
+  color: #3c5f7d;
+}
+
+.wacrm-dock-item.wacrm-dock-more {
+  border-color: rgb(126 193 158 / 82%);
+  background: linear-gradient(180deg, rgb(236 252 243 / 94%), rgb(215 245 227 / 88%));
+  color: #146341;
+}
+
+.wacrm-dock-item.is-blocked {
+  border-style: dashed;
+  opacity: 0.82;
 }
 
 .wacrm-dock-item.active {
-  background: linear-gradient(130deg, #72a8da, #5795cf);
-  border-color: #a9cff1;
+  background: linear-gradient(130deg, #22a9f0, #1d84d3);
+  border-color: #76cfff;
   color: #ffffff;
+  box-shadow:
+    0 10px 18px rgb(9 82 130 / 34%),
+    inset 0 1px 0 rgb(255 255 255 / 28%);
 }
 
 .wacrm-dock-toggle:hover,
 .wacrm-dock-item:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.06);
+  transform: translateX(1px);
 }
 
 .wacrm-dock-toggle:focus-visible,

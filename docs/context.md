@@ -33,10 +33,10 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - seguimiento manual asistido con limite diario de cumplimiento (`20/dia`, solo inserta texto)
     - tablero de "leads calientes hoy" con acceso rapido a ficha
     - tutorial guiado con checklist persistente (storage local de extension)
-    - dock lateral + tabs para navegar modulos del panel, con atajos operativos (guardar lead, insertar plantilla, seguimiento rapido)
+    - dock lateral + tabs para navegar modulos del panel, con atajos operativos y esquema de 2 niveles (primarios visibles + secundarios en `Mas`)
     - panel arrastrable por la barra superior; doble clic para resetear posicion automatica
-    - barra de estado/atajos CRM ubicada junto al input (debajo del composer) con estado vivo de lead/compliance/modo y atajos (`Guardar`, `Resumen`, `CRM`)
-    - barra de acciones sobre la caja de mensaje con accesos rapidos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos
+    - barra de estado/atajos CRM ubicada junto al input (debajo del composer) con estado vivo de lead/compliance/modo y atajos (`Guardar`, `Resumen`, `CRM`) con paleta visual activa
+    - barra de acciones sobre la caja de mensaje con accesos rapidos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos con colores de estado
     - sincronizacion dinamica de datos del workspace (templates/leads/reminders/compliance) sin recargar pagina, con auto-refresh por intervalo y al volver foco/visibilidad
     - sincronizacion instantanea popup -> panel embebido via `chrome.storage` (`crm_workspace_refresh_tick`) para reflejar cambios en caliente tras guardar entidades
     - modo privacidad `Blur demo` para ocultar chats/mensajes durante demos

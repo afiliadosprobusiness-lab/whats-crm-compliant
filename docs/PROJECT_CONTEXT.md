@@ -73,10 +73,10 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido suprime errores globales `Extension context invalidated` en `unhandledrejection/error` para evitar ruido en runtime al recargar extension.
   - Seguimiento manual asistido en panel embebido con limite diario local de cumplimiento (`20/dia`), siempre con envio manual.
   - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
-  - Dock lateral con atajos operativos: guardar lead rapido, insertar plantilla y crear seguimiento rapido.
+  - Dock lateral con atajos operativos y esquema de 2 niveles (primarios visibles + secundarios en `Mas`) para reducir sobrecarga visual.
   - Panel embebido arrastrable; doble clic en la barra superior reinicia posicion automatica.
-  - Panel embebido agrega barra de estado/atajos junto al input (debajo del composer) con estado vivo de lead/compliance/modo y acciones (`Guardar`, `Resumen`, `CRM`).
-  - Panel embebido agrega barra de acciones sobre la caja de mensaje con atajos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos, manteniendo envio manual.
+  - Panel embebido agrega barra de estado/atajos junto al input (debajo del composer) con estado vivo de lead/compliance/modo y acciones (`Guardar`, `Resumen`, `CRM`) con paleta visual activa.
+  - Panel embebido agrega barra de acciones sobre la caja de mensaje con atajos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos con colores de estado, manteniendo envio manual.
   - Panel embebido sincroniza datos en caliente sin recargar (templates/leads/reminders/compliance), con auto-refresh por intervalo y refresco inmediato al recuperar foco.
   - Popup y panel embebido propagan refresco inmediato via storage key `crm_workspace_refresh_tick` para reflejar altas/cambios sin recargar.
   - `background service worker` de extension para polling de recordatorios vencidos (`chrome.alarms`) y alertas nativas (`chrome.notifications`).

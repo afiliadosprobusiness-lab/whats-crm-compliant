@@ -54,6 +54,11 @@
     "quick-followup": "Recordatorio +24h: crea recordatorio rapido. Requiere lead guardado.",
   };
   const LEAD_REQUIRED_ACTIONS = new Set(["copilot-summary", "copilot-reply", "insert-followup", "quick-followup"]);
+  const DOCK_ACTION_GUARD_MAP = {
+    "save-lead": "save-lead",
+    "insert-template": "insert-template",
+    "quick-followup": "quick-followup",
+  };
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const PANEL_POSITION_KEY = "crm_panel_position_v1";
   const CUSTOM_STAGES_KEY = "crm_custom_stages_v1";
@@ -2029,6 +2034,7 @@
       }
       setQuickBarButtonsState(composerBar, disabled);
     }
+    renderDockContextualState();
   };
 
   const setActiveSection = (section) => {
@@ -2074,6 +2080,30 @@
   };
 
   const runDockAction = (action) => {
+    if (action === "toggle-more") {
+      const menu = state.nodes.dockMenu;
+      if (!(menu instanceof HTMLElement)) {
+        return;
+      }
+      const showSecondary = !menu.classList.contains("show-secondary");
+      menu.classList.toggle("show-secondary", showSecondary);
+      const moreBtn = state.nodes.dock?.querySelector("[data-action='toggle-more']");
+      if (moreBtn instanceof HTMLButtonElement) {
+        moreBtn.textContent = showSecondary ? "Menos" : "Mas";
+        moreBtn.setAttribute("aria-expanded", showSecondary ? "true" : "false");
+      }
+      return;
+    }
+
+    const mappedGuardAction = DOCK_ACTION_GUARD_MAP[action];
+    if (mappedGuardAction) {
+      const guardMessage = getQuickActionGuardMessage(mappedGuardAction);
+      if (guardMessage) {
+        setStatus(guardMessage, true);
+        return;
+      }
+    }
+
     if (action === "overview") {
       openSectionFromMenu("overview");
       state.nodes.hotLeadsEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -2093,24 +2123,42 @@
     }
     if (action === "save-lead") {
       openSectionFromMenu("lead");
-      if (getWhatsAppLoggedIn() && state.token && state.canUseCrm) {
-        void withSyncGuard(saveLead);
-      }
+      void withSyncGuard(saveLead);
       return;
     }
     if (action === "insert-template") {
       openSectionFromMenu("actions");
-      if (getWhatsAppLoggedIn() && state.token && state.canUseCrm) {
-        insertTemplateIntoComposer();
-      }
+      insertTemplateIntoComposer();
       return;
     }
     if (action === "quick-followup") {
       openSectionFromMenu("actions");
-      if (getWhatsAppLoggedIn() && state.token && state.canUseCrm) {
-        void withSyncGuard(createQuickFollowup);
+      if (state.nodes.followupHoursInput) {
+        state.nodes.followupHoursInput.value = "24";
       }
+      void withSyncGuard(createQuickFollowup);
     }
+  };
+
+  const renderDockContextualState = () => {
+    const dockButtons = Array.isArray(state.nodes.dockButtons) ? state.nodes.dockButtons : [];
+    dockButtons.forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      const action = String(button.dataset.action || "").trim();
+      const mappedGuardAction = DOCK_ACTION_GUARD_MAP[action];
+      const guardMessage = mappedGuardAction ? getQuickActionGuardMessage(mappedGuardAction) : "";
+      const baseTitle = String(button.dataset.baseTitle || button.getAttribute("title") || "").trim();
+      if (!button.dataset.baseTitle && baseTitle) {
+        button.dataset.baseTitle = baseTitle;
+      }
+      if (baseTitle) {
+        button.setAttribute("title", guardMessage ? `${baseTitle} | ${guardMessage}` : baseTitle);
+      }
+      button.classList.toggle("is-blocked", Boolean(guardMessage));
+      button.setAttribute("aria-disabled", guardMessage ? "true" : "false");
+    });
   };
 
   const setModeState = () => {
@@ -2912,13 +2960,16 @@
     dock.innerHTML = `
       <button type="button" class="wacrm-dock-toggle" id="wacrm-dock-toggle" title="Abrir menu CRM">CRM</button>
       <div class="wacrm-dock-menu" id="wacrm-dock-menu">
-        <button type="button" class="wacrm-dock-item active" data-action="overview" data-section="overview" title="Inicio y leads calientes">Inicio</button>
-        <button type="button" class="wacrm-dock-item" data-action="save-lead" data-section="lead" title="Guardar lead del chat actual">Guardar</button>
-        <button type="button" class="wacrm-dock-item" data-action="insert-template" data-section="actions" title="Insertar plantilla seleccionada">Plantilla</button>
-        <button type="button" class="wacrm-dock-item" data-action="quick-followup" data-section="actions" title="Crear seguimiento rapido (24h)">Seguir</button>
-        <button type="button" class="wacrm-dock-item" data-action="crm" data-section="crm" title="Vista CRM Kanban">Kanban</button>
-        <button type="button" class="wacrm-dock-item" data-action="tutorial" data-section="tutorial" title="Tutorial">Guia</button>
-        <button type="button" class="wacrm-dock-item" data-action="all" data-section="all" title="Ver todo el panel">Todo</button>
+        <button type="button" class="wacrm-dock-item is-primary active" data-action="overview" data-section="overview" title="Inicio y leads calientes">Inicio</button>
+        <button type="button" class="wacrm-dock-item is-primary" data-action="save-lead" data-section="lead" title="Guardar lead del chat actual">Guardar</button>
+        <button type="button" class="wacrm-dock-item is-primary" data-action="insert-template" data-section="actions" title="Insertar plantilla seleccionada">Plantilla</button>
+        <button type="button" class="wacrm-dock-item is-primary" data-action="quick-followup" data-section="actions" title="Crear seguimiento rapido (24h)">Seguir</button>
+        <button type="button" class="wacrm-dock-item wacrm-dock-more" data-action="toggle-more" title="Mostrar mas atajos" aria-expanded="false">Mas</button>
+        <div class="wacrm-dock-secondary" id="wacrm-dock-secondary">
+          <button type="button" class="wacrm-dock-item is-secondary" data-action="crm" data-section="crm" title="Vista CRM Kanban">Kanban</button>
+          <button type="button" class="wacrm-dock-item is-secondary" data-action="tutorial" data-section="tutorial" title="Tutorial">Guia</button>
+          <button type="button" class="wacrm-dock-item is-secondary" data-action="all" data-section="all" title="Ver todo el panel">Todo</button>
+        </div>
       </div>
     `;
     document.body.appendChild(dock);
@@ -2933,11 +2984,15 @@
     });
     state.nodes.dockButtons.forEach((button) => {
       button.addEventListener("click", () => {
-        runDockAction(button.dataset.action || "overview");
-        state.dockOpen = false;
-        state.nodes.dock?.classList.remove("open");
+        const action = button.dataset.action || "overview";
+        runDockAction(action);
+        if (action !== "toggle-more") {
+          state.dockOpen = false;
+          state.nodes.dock?.classList.remove("open");
+        }
       });
     });
+    renderDockContextualState();
   };
 
   const createPanel = () => {
