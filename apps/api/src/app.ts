@@ -9,6 +9,11 @@ import { errorHandler, notFoundHandler } from "./core/error-middleware.js";
 import { AppError } from "./core/errors.js";
 import { requestIdMiddleware } from "./core/request-id.js";
 import { asyncHandler } from "./core/http.js";
+import { AuditRepository } from "./modules/audit/audit.repository.js";
+import { AuditService } from "./modules/audit/audit.service.js";
+import { AnalyticsController } from "./modules/analytics/analytics.controller.js";
+import { createAnalyticsRouter } from "./modules/analytics/analytics.routes.js";
+import { AnalyticsService } from "./modules/analytics/analytics.service.js";
 import { AuthController } from "./modules/auth/auth.controller.js";
 import { createAuthMiddleware, subscriptionGuardMiddleware } from "./modules/auth/auth.middleware.js";
 import { AuthRepository } from "./modules/auth/auth.repository.js";
@@ -21,6 +26,10 @@ import { createCampaignsRouter } from "./modules/campaigns/campaigns.routes.js";
 import { CampaignsController } from "./modules/campaigns/campaigns.controller.js";
 import { CampaignsRepository } from "./modules/campaigns/campaigns.repository.js";
 import { CampaignsService } from "./modules/campaigns/campaigns.service.js";
+import { ComplianceController } from "./modules/compliance/compliance.controller.js";
+import { ComplianceRepository } from "./modules/compliance/compliance.repository.js";
+import { createComplianceRouter } from "./modules/compliance/compliance.routes.js";
+import { ComplianceService } from "./modules/compliance/compliance.service.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { LeadsController } from "./modules/leads/leads.controller.js";
 import { LeadsRepository } from "./modules/leads/leads.repository.js";
@@ -67,12 +76,16 @@ export const createApp = () => {
   const campaignsRepository = new CampaignsRepository();
   const remindersRepository = new RemindersRepository();
   const webhookEventsRepository = new WebhookEventsRepository();
+  const auditRepository = new AuditRepository();
+  const complianceRepository = new ComplianceRepository();
 
   const authService = new AuthService(authRepository, env);
   const authMiddleware = createAuthMiddleware(authService);
   const whatsappService = new WhatsAppService(env, webhookEventsRepository);
   const billingService = new BillingService(authRepository, env);
-  const leadsService = new LeadsService(leadsRepository);
+  const auditService = new AuditService(auditRepository);
+  const leadsService = new LeadsService(leadsRepository, auditService, authRepository);
+  const analyticsService = new AnalyticsService(leadsRepository, authRepository, campaignsRepository);
   const templatesService = new TemplatesService(templatesRepository);
   const campaignsService = new CampaignsService(
     campaignsRepository,
@@ -80,8 +93,16 @@ export const createApp = () => {
     templatesRepository,
     whatsappService,
     env,
+    auditService,
   );
-  const remindersService = new RemindersService(remindersRepository, leadsRepository);
+  const remindersService = new RemindersService(remindersRepository, leadsRepository, auditService);
+  const complianceService = new ComplianceService(
+    complianceRepository,
+    leadsRepository,
+    campaignsRepository,
+    auditService,
+    env,
+  );
 
   const authController = new AuthController(authService);
   const billingController = new BillingController(billingService);
@@ -89,6 +110,8 @@ export const createApp = () => {
   const templatesController = new TemplatesController(templatesService);
   const campaignsController = new CampaignsController(campaignsService);
   const remindersController = new RemindersController(remindersService);
+  const complianceController = new ComplianceController(complianceService);
+  const analyticsController = new AnalyticsController(analyticsService);
   const webhooksController = new WebhooksController(whatsappService);
 
   const app = express();
@@ -287,6 +310,8 @@ export const createApp = () => {
   crmRouter.use("/templates", createTemplatesRouter(templatesController));
   crmRouter.use("/campaigns", createCampaignsRouter(campaignsController));
   crmRouter.use("/reminders", createRemindersRouter(remindersController));
+  crmRouter.use("/compliance", createComplianceRouter(complianceController));
+  crmRouter.use("/analytics", createAnalyticsRouter(analyticsController));
   app.use("/api/v1", crmRouter);
 
   app.use("/api/v1/webhooks", createWebhooksRouter(webhooksController));

@@ -15,10 +15,12 @@ CRM WhatsApp MVP para cobro mensual base de S/50, con backend deployable en Verc
 - Auth multiusuario por workspace (`owner`, `agent`) + login Google (Firebase Auth)
 - Suscripcion mensual por workspace
 - Leads, pipeline, notas, plantillas, campanas y recordatorios
+- Compliance Trust Center (opt-in coverage, riesgo anti-spam, cuota diaria y auditoria reciente)
 - Panel CRM embebido en `web.whatsapp.com` (lead rapido + notas + recordatorios + insertar plantilla)
 - Webhook WhatsApp (Cloud API opcional, `dry_run` fallback)
 - Bloqueo CRM si suscripcion no activa
 - Limites de cumplimiento para campanas: por minuto y por dia
+- Preflight de campanas (bloquea lotes con alto riesgo de incumplimiento)
 - Persistencia en Firestore (ya no memoria)
 
 ## Estructura
@@ -59,6 +61,8 @@ Base:
 - `SESSION_TTL_DAYS`
 - `MAX_CAMPAIGN_MESSAGES_PER_MINUTE`
 - `MAX_CAMPAIGN_MESSAGES_PER_DAY`
+- `MAX_CAMPAIGN_NON_OPTIN_PERCENT`
+- `MAX_MANUAL_ASSIST_ACTIONS_PER_MINUTE`
 - `WHATSAPP_VERIFY_TOKEN`
 - `WHATSAPP_GRAPH_API_VERSION`
 

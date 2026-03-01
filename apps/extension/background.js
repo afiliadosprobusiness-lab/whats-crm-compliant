@@ -1,4 +1,5 @@
 const DEFAULT_API_BASE_URL = "https://whats-crm-compliant.vercel.app/api/v1";
+const BACKEND_URL_STORAGE_KEY = "crm_backend_url";
 const REMINDER_ALARM_NAME = "wacrm_reminder_check_v1";
 const REMINDER_ALARM_PERIOD_MINUTES = 1;
 const NOTIFIED_REMINDERS_KEY = "crm_notified_reminders_v1";
@@ -45,6 +46,28 @@ const fetchJson = async (url, options = {}) => {
     throw new Error(message);
   }
   return payload;
+};
+
+const normalizeApiBaseUrl = (input) => {
+  const raw = String(input || "").trim();
+  if (!raw) {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  try {
+    const candidate = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
+    const parsed = new URL(candidate);
+    const basePath = parsed.pathname.replace(/\/+$/, "");
+    const normalizedPath = basePath.endsWith("/api/v1")
+      ? basePath
+      : `${basePath || ""}/api/v1`;
+    parsed.pathname = normalizedPath;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch (_error) {
+    return DEFAULT_API_BASE_URL;
+  }
 };
 
 const normalizeNotifiedReminders = (value) => {
@@ -99,13 +122,13 @@ const checkDueReminders = async () => {
   checkingReminders = true;
 
   try {
-    const values = await storageGet(["crm_api_base_url", "crm_token", NOTIFIED_REMINDERS_KEY]);
+    const values = await storageGet([BACKEND_URL_STORAGE_KEY, "crm_api_base_url", "crm_token", NOTIFIED_REMINDERS_KEY]);
     const token = String(values.crm_token || "").trim();
     if (!token) {
       return;
     }
 
-    const apiBaseUrl = String(values.crm_api_base_url || "").trim() || DEFAULT_API_BASE_URL;
+    const apiBaseUrl = normalizeApiBaseUrl(values[BACKEND_URL_STORAGE_KEY] || values.crm_api_base_url || "");
     const authHeaders = {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -197,7 +220,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") {
     return;
   }
-  if (changes.crm_token || changes.crm_api_base_url) {
+  if (changes.crm_token || changes.crm_api_base_url || changes[BACKEND_URL_STORAGE_KEY]) {
     void syncAlarmWithSession();
     void checkDueReminders();
   }

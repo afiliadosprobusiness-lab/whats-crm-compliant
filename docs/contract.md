@@ -299,13 +299,55 @@ Response `201`:
 }
 ```
 
+Campos aditivos del objeto `lead` (compatibilidad preservada):
+
+- `opted_in: boolean`
+- `opted_in_at: string | null` (ISO)
+- `opted_in_source: string | null`
+- `ownerUserId: string | null`
+- `assignedAt: string | null` (ISO)
+- `firstResponseAt: string | null` (ISO)
+- `lastFollowupAt: string | null` (ISO)
+- `healthScore: number` (0..100)
+- `healthTemperature: "hot" | "warm" | "cold"`
+- `healthUpdatedAt: string | null` (ISO)
+- `latestHealthEvent: string | null`
+- `sla: { firstResponseDueAt, firstResponseBreached, followupDueAt, followupBreached }`
+
 ### `GET /api/v1/leads`
+
+Query opcional:
+
+- `view: all | my | unassigned | overdue`
 
 Response `200`:
 
 ```json
 {
   "leads": []
+}
+```
+
+### `GET /api/v1/leads/inbox`
+
+Query opcional:
+
+- `view: all | my | unassigned | overdue`
+
+Response `200`:
+
+```json
+{
+  "inbox": {
+    "view": "my",
+    "counts": {
+      "all": 120,
+      "my": 35,
+      "unassigned": 20,
+      "overdue": 14
+    },
+    "leads": []
+  }
 }
 ```
 
@@ -388,6 +430,58 @@ Response `200`:
 }
 ```
 
+### `PATCH /api/v1/leads/:leadId/assign`
+
+Request:
+
+```json
+{
+  "ownerUserId": "usr_..." 
+}
+```
+
+Notas:
+
+- `ownerUserId: null` desasigna el lead.
+- `ownerUserId` debe pertenecer al mismo workspace.
+
+Response `200`:
+
+```json
+{
+  "lead": {}
+}
+```
+
+### `POST /api/v1/leads/:leadId/health-events`
+
+Request:
+
+```json
+{
+  "event": "responded",
+  "note": "Respondio y pidio cotizacion"
+}
+```
+
+Valores permitidos en `event`:
+
+- `responded`
+- `appointment_set`
+- `manual_followup`
+- `no_response_72h`
+- `spam_reported`
+- `won`
+- `lost`
+
+Response `200`:
+
+```json
+{
+  "lead": {}
+}
+```
+
 ### `POST /api/v1/templates`
 
 Request:
@@ -447,6 +541,52 @@ Response `200`:
 }
 ```
 
+### `POST /api/v1/campaigns/preflight`
+
+Request:
+
+```json
+{
+  "name": "Promo Marzo",
+  "templateId": "tpl_1",
+  "recipientLeadIds": ["lead_1", "lead_2"]
+}
+```
+
+Response `200`:
+
+```json
+{
+  "preflight": {
+    "canSend": true,
+    "blockers": [],
+    "risk": {
+      "score": 15,
+      "level": "low",
+      "reasons": []
+    }
+  }
+}
+```
+
+### `POST /api/v1/campaigns/:campaignId/preflight`
+
+Response `200`:
+
+```json
+{
+  "preflight": {
+    "canSend": true,
+    "blockers": [],
+    "risk": {
+      "score": 15,
+      "level": "low",
+      "reasons": []
+    }
+  }
+}
+```
+
 ### `POST /api/v1/campaigns/:campaignId/send`
 
 Response `200`:
@@ -460,6 +600,7 @@ Response `200`:
 
 Posibles errores adicionales:
 - `429 RATE_LIMITED` cuando el workspace supera `MAX_CAMPAIGN_MESSAGES_PER_DAY`.
+- `409 CONFLICT` cuando el preflight de cumplimiento bloquea el lote (ej: >20% sin opt-in).
 
 ### `POST /api/v1/reminders`
 
@@ -488,6 +629,143 @@ Response `200`:
 ```json
 {
   "reminders": []
+}
+```
+
+### `PATCH /api/v1/reminders/:reminderId/complete`
+
+Response `200`:
+
+```json
+{
+  "reminder": {
+    "status": "done",
+    "completedAt": "2026-03-01T16:10:00.000Z",
+    "completedByUserId": "usr_..."
+  }
+}
+```
+
+## Compliance
+
+### `GET /api/v1/compliance/trust-center`
+
+Response `200`:
+
+```json
+{
+  "trustCenter": {
+    "compliantMode": "on",
+    "optInCoverage": {
+      "totalLeads": 120,
+      "optedInLeads": 95,
+      "percentage": 79.17
+    },
+    "campaignDailyQuota": {
+      "maxPerDay": 200,
+      "sentToday": 45,
+      "remaining": 155,
+      "usagePercentage": 22.5
+    },
+    "antiSpamRisk": {
+      "score": 30,
+      "level": "low",
+      "reasons": []
+    },
+    "recentAuditLogs": [],
+    "evaluatedAt": "2026-03-01T16:10:00.000Z"
+  }
+}
+```
+
+### `POST /api/v1/compliance/manual-assist`
+
+Request:
+
+```json
+{
+  "action": "copilot_reply",
+  "context": "mode:reply"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "usage": {
+    "action": "copilot_reply",
+    "limitPerMinute": 12,
+    "usedInCurrentMinute": 3,
+    "remainingInCurrentMinute": 9,
+    "minuteBucket": "2026-03-01T16:10",
+    "resetAt": "2026-03-01T16:11:00.000Z"
+  }
+}
+```
+
+Posibles errores adicionales:
+- `429 RATE_LIMITED` cuando el usuario supera `MAX_MANUAL_ASSIST_ACTIONS_PER_MINUTE`.
+
+### `GET /api/v1/compliance/messaging-mode`
+
+Response `200`:
+
+```json
+{
+  "mode": {
+    "configuredMode": "crm_manual",
+    "resolvedMode": "crm_manual",
+    "provider": "dry_run",
+    "dryRun": true,
+    "cloudApiCredentials": {
+      "accessTokenPresent": false,
+      "phoneNumberIdPresent": false,
+      "valid": false
+    },
+    "reason": "Modo CRM Manual: operacion asistida en WhatsApp Web, sin auto-envio.",
+    "evaluatedAt": "2026-03-01T16:12:00.000Z"
+  }
+}
+```
+
+## Analytics
+
+### `GET /api/v1/analytics/productivity`
+
+Response `200`:
+
+```json
+{
+  "productivity": {
+    "generatedAt": "2026-03-01T16:12:00.000Z",
+    "totals": {
+      "leads": 120,
+      "assignedLeads": 90,
+      "unassignedLeads": 30,
+      "overdueLeads": 14,
+      "hotLeads": 28,
+      "warmLeads": 62,
+      "coldLeads": 30,
+      "campaigns": 15,
+      "campaignsSent": 10
+    },
+    "stageFunnel": [
+      { "stage": "new", "count": 40, "percentage": 33.33 }
+    ],
+    "healthBreakdown": {
+      "hot": 28,
+      "warm": 62,
+      "cold": 30
+    },
+    "conversion": {
+      "wonRate": 10.5,
+      "lostRate": 8.2,
+      "qualifiedRate": 35.2,
+      "firstResponseOnTimeRate": 72.1
+    },
+    "agents": []
+  }
 }
 ```
 
@@ -546,3 +824,18 @@ Lista de eventos recientes (debug MVP).
 - Cambio: se agrega `POST /api/v1/admin/subscriptions-by-email` para consultar estado real de suscripcion por lote de correos
 - Tipo: non-breaking
 - Impacto: permite reconciliar estado de superadmin con estado real de extension sin modificar suscripciones
+
+- Fecha: 2026-03-01
+- Cambio: se agregan campos aditivos `opted_in`, `opted_in_at`, `opted_in_source` en `lead` para trazabilidad de consentimiento
+- Tipo: non-breaking
+- Impacto: preserva `consentStatus/consentSource` y habilita capa de cumplimiento detallada
+
+- Fecha: 2026-03-01
+- Cambio: se agregan `PATCH /api/v1/reminders/:reminderId/complete`, `POST /api/v1/campaigns/preflight`, `POST /api/v1/campaigns/:campaignId/preflight`, `GET /api/v1/compliance/trust-center` y `POST /api/v1/compliance/manual-assist`
+- Tipo: non-breaking
+- Impacto: agrega preflight de campanas, trust center de cumplimiento, rate limit por usuario/minuto para acciones asistidas y cierre trazable de recordatorios
+
+- Fecha: 2026-03-01
+- Cambio: se agregan `GET /api/v1/leads/inbox`, `PATCH /api/v1/leads/:leadId/assign`, `POST /api/v1/leads/:leadId/health-events`, `GET /api/v1/compliance/messaging-mode` y `GET /api/v1/analytics/productivity`; ademas se extiende `lead` con owner/health/SLA
+- Tipo: non-breaking
+- Impacto: habilita flujo multiagente, health score operativo, visibilidad de modo dual CRM vs Cloud API y dashboard de productividad sin romper endpoints existentes

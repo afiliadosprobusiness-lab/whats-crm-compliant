@@ -7,7 +7,10 @@ export const createRemindersRouter = (remindersController: RemindersController):
 
   router.get("/", asyncHandler(async (req, res) => remindersController.listReminders(req, res)));
   router.post("/", asyncHandler(async (req, res) => remindersController.createReminder(req, res)));
+  router.patch(
+    "/:reminderId/complete",
+    asyncHandler(async (req, res) => remindersController.completeReminder(req, res)),
+  );
 
   return router;
 };
-

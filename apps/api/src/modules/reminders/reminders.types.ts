@@ -7,6 +7,8 @@ export type Reminder = {
   note: string;
   dueAt: string;
   status: "pending" | "done";
+  completedAt: string | null;
+  completedByUserId: string | null;
   createdAt: string;
   updatedAt: string;
 };

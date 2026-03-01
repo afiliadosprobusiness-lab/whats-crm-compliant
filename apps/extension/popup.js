@@ -1,8 +1,16 @@
 const DEFAULT_API_BASE_URL = "https://whats-crm-compliant.vercel.app/api/v1";
 const stages = ["new", "contacted", "qualified", "won", "lost"];
+const inboxViews = ["my", "unassigned", "overdue", "all"];
+const healthQuickEvents = [
+  { event: "responded", label: "Respondio" },
+  { event: "appointment_set", label: "Cita" },
+  { event: "no_response_72h", label: "72h" },
+  { event: "spam_reported", label: "Spam" },
+];
 const LANG_STORAGE_KEY = "crm_lang_v1";
 const SEGMENTS_STORAGE_KEY = "crm_segments_v1";
 const ACTIVE_SEGMENT_STORAGE_KEY = "crm_active_segment_v1";
+const BACKEND_URL_STORAGE_KEY = "crm_backend_url";
 const I18N = {
   es: {},
   en: {
@@ -61,11 +69,44 @@ const I18N = {
     template_saved: "Template saved.",
     campaign_sent: "Campaign sent.",
     reminder_created: "Reminder created.",
+    reminder_completed: "Reminder completed.",
     campaign_recipients_required: "Select at least one opted_in lead.",
     reminder_invalid_date: "Invalid date/time for reminder.",
     csv_processing: "Importing CSV...",
     csv_no_rows: "CSV has no valid rows.",
     csv_import_result: "CSV import completed.",
+    backend_config_title: "Backend URL",
+    backend_url_label: "BACKEND_URL",
+    btn_save_backend_url: "Save BACKEND_URL",
+    backend_saved: "BACKEND_URL updated.",
+    backend_invalid_url: "Invalid backend URL.",
+    compliance_title: "Compliance Trust Center",
+    compliant_mode_on: "Compliant Mode ON",
+    trust_optin: "Opt-in coverage",
+    trust_quota: "Daily quota",
+    trust_risk: "Anti-spam risk",
+    no_audit_logs: "No audit events yet.",
+    messaging_mode_title: "Messaging mode",
+    inbox_title: "Multi-agent inbox",
+    inbox_my: "My leads",
+    inbox_unassigned: "Unassigned",
+    inbox_overdue: "Overdue",
+    inbox_all: "All",
+    productivity_title: "Productivity",
+    kpi_assigned: "Assigned",
+    kpi_overdue: "Overdue",
+    label_owner: "Owner",
+    unassigned_owner: "Unassigned",
+    inbox_empty: "No leads in this inbox.",
+    lead_assigned: "Lead assignment updated.",
+    lead_health_updated: "Lead health updated.",
+    messaging_mode_manual: "Manual CRM mode active.",
+    messaging_mode_cloud: "Cloud API mode active.",
+    preflight_pending: "Preflight pending.",
+    btn_campaign_preflight: "Validate preflight",
+    btn_complete_reminder: "Complete",
+    preflight_ready: "Preflight ok.",
+    preflight_blocked: "Preflight blocked the campaign.",
   },
   pt: {
     access_title: "Acesso",
@@ -123,11 +164,44 @@ const I18N = {
     template_saved: "Modelo salvo.",
     campaign_sent: "Campanha enviada.",
     reminder_created: "Lembrete criado.",
+    reminder_completed: "Lembrete concluido.",
     campaign_recipients_required: "Selecione pelo menos um lead opted_in.",
     reminder_invalid_date: "Data/hora invalida para lembrete.",
     csv_processing: "Importando CSV...",
     csv_no_rows: "CSV sem linhas validas.",
     csv_import_result: "Importacao CSV concluida.",
+    backend_config_title: "Backend URL",
+    backend_url_label: "BACKEND_URL",
+    btn_save_backend_url: "Salvar BACKEND_URL",
+    backend_saved: "BACKEND_URL atualizada.",
+    backend_invalid_url: "URL de backend invalida.",
+    compliance_title: "Compliance Trust Center",
+    compliant_mode_on: "Compliant Mode ON",
+    trust_optin: "Cobertura opt-in",
+    trust_quota: "Cota diaria",
+    trust_risk: "Risco anti-spam",
+    no_audit_logs: "Sem eventos de auditoria.",
+    messaging_mode_title: "Modo de mensagens",
+    inbox_title: "Caixa multiagente",
+    inbox_my: "Meus leads",
+    inbox_unassigned: "Sem dono",
+    inbox_overdue: "Vencidos",
+    inbox_all: "Todos",
+    productivity_title: "Produtividade",
+    kpi_assigned: "Atribuidos",
+    kpi_overdue: "Vencidos",
+    label_owner: "Responsavel",
+    unassigned_owner: "Sem dono",
+    inbox_empty: "Sem leads nesta caixa.",
+    lead_assigned: "Atribuicao do lead atualizada.",
+    lead_health_updated: "Saude do lead atualizada.",
+    messaging_mode_manual: "Modo CRM manual ativo.",
+    messaging_mode_cloud: "Modo Cloud API ativo.",
+    preflight_pending: "Preflight pendente.",
+    btn_campaign_preflight: "Validar preflight",
+    btn_complete_reminder: "Concluir",
+    preflight_ready: "Preflight OK.",
+    preflight_blocked: "Preflight bloqueou a campanha.",
   },
 };
 
@@ -137,10 +211,17 @@ const state = {
   authUser: null,
   workspace: null,
   subscription: null,
+  trustCenter: null,
+  messagingMode: null,
+  campaignPreflight: null,
+  leadInbox: null,
+  leadInboxView: "my",
   leads: [],
   templates: [],
   campaigns: [],
   reminders: [],
+  workspaceUsers: [],
+  productivity: null,
   language: "es",
   draggedLeadId: "",
   segmentsStore: {},
@@ -153,6 +234,8 @@ const feedbackEl = document.getElementById("feedback");
 const sessionLabelEl = document.getElementById("session-label");
 const subscriptionLabelEl = document.getElementById("subscription-status");
 const languageSelectEl = document.getElementById("language-select");
+const backendUrlInputEl = document.getElementById("backend-url-input");
+const backendUrlPreviewEl = document.getElementById("backend-url-preview");
 const hasChromeStorage = typeof chrome !== "undefined" && Boolean(chrome.storage?.local);
 
 const storageGet = async (keys) => {
@@ -196,6 +279,32 @@ const normalizePhone = (input) => {
     return `+${cleaned.slice(2)}`;
   }
   return `+${cleaned}`;
+};
+
+const normalizeApiBaseUrl = (input) => {
+  const raw = String(input || "").trim();
+  if (!raw) {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  try {
+    const candidate = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
+    const parsed = new URL(candidate);
+    const path = parsed.pathname.replace(/\/+$/, "");
+    parsed.pathname = path.endsWith("/api/v1") ? path : `${path || ""}/api/v1`;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch (_error) {
+    return "";
+  }
+};
+
+const isLeadOptedIn = (lead) => {
+  if (typeof lead?.opted_in === "boolean") {
+    return lead.opted_in;
+  }
+  return String(lead?.consentStatus || "") === "opted_in";
 };
 
 const openInNewTab = (url) => {
@@ -307,6 +416,18 @@ const persistToken = (token) => {
   void storageSet({ crm_token: token || "" });
 };
 
+const persistApiBaseUrl = async (apiBaseUrl) => {
+  state.apiBaseUrl = apiBaseUrl;
+  localStorage.setItem(BACKEND_URL_STORAGE_KEY, apiBaseUrl);
+  // Keep legacy key in sync for content/background compatibility.
+  localStorage.setItem("crm_api_base_url", apiBaseUrl);
+  await storageSet({
+    [BACKEND_URL_STORAGE_KEY]: apiBaseUrl,
+    crm_api_base_url: apiBaseUrl,
+  });
+  renderBackendConfig();
+};
+
 const apiRequest = async (path, options = {}) => {
   const extraHeaders = options.headers || {};
   const authHeaders = state.token ? { Authorization: `Bearer ${state.token}` } : {};
@@ -347,10 +468,315 @@ const renderSubscription = () => {
   subscriptionLabelEl.classList.add(isActive ? "subscription-state--active" : "subscription-state--inactive");
 };
 
+const renderBackendConfig = () => {
+  if (backendUrlInputEl) {
+    backendUrlInputEl.value = state.apiBaseUrl;
+  }
+  if (backendUrlPreviewEl) {
+    backendUrlPreviewEl.textContent = `API: ${state.apiBaseUrl}`;
+  }
+};
+
+const renderSimpleList = (listEl, items) => {
+  listEl.innerHTML = "";
+  items.forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = String(item || "").slice(0, 240);
+    listEl.appendChild(li);
+  });
+};
+
+const renderTrustCenter = () => {
+  const badgeEl = document.getElementById("compliance-mode-badge");
+  const optInEl = document.getElementById("compliance-optin");
+  const quotaEl = document.getElementById("compliance-quota");
+  const riskEl = document.getElementById("compliance-risk");
+  const alertsEl = document.getElementById("compliance-alerts");
+  const auditEl = document.getElementById("audit-log-list");
+  if (!optInEl || !quotaEl || !riskEl || !alertsEl || !auditEl) {
+    return;
+  }
+
+  if (badgeEl) {
+    badgeEl.textContent = tr("compliant_mode_on", "Compliant Mode ON");
+  }
+
+  const trust = state.trustCenter;
+  if (!trust) {
+    optInEl.textContent = "0%";
+    quotaEl.textContent = "0/0";
+    riskEl.textContent = "low (0)";
+    renderSimpleList(alertsEl, [tr("preflight_pending", "Preflight pendiente.")]);
+    renderSimpleList(auditEl, [tr("no_audit_logs", "Sin eventos de auditoria.")]);
+    return;
+  }
+
+  optInEl.textContent = `${trust.optInCoverage.percentage}%`;
+  quotaEl.textContent = `${trust.campaignDailyQuota.sentToday}/${trust.campaignDailyQuota.maxPerDay}`;
+  riskEl.textContent = `${trust.antiSpamRisk.level} (${trust.antiSpamRisk.score})`;
+
+  const reasons = Array.isArray(trust.antiSpamRisk.reasons) ? trust.antiSpamRisk.reasons : [];
+  if (reasons.length) {
+    renderSimpleList(alertsEl, reasons);
+  } else {
+    renderSimpleList(alertsEl, [tr("preflight_ready", "Preflight ok.")]);
+  }
+
+  const logs = Array.isArray(trust.recentAuditLogs) ? trust.recentAuditLogs.slice(0, 8) : [];
+  if (!logs.length) {
+    renderSimpleList(auditEl, [tr("no_audit_logs", "Sin eventos de auditoria.")]);
+    return;
+  }
+
+  renderSimpleList(
+    auditEl,
+    logs.map((log) => {
+      const when = log?.createdAt ? new Date(log.createdAt).toLocaleString() : "-";
+      const summary = String(log?.summary || log?.action || "Evento");
+      return `${when} | ${summary}`;
+    }),
+  );
+};
+
+const getOwnerLabel = (ownerUserId) => {
+  if (!ownerUserId) {
+    return tr("unassigned_owner", "Sin asignar");
+  }
+  const user = state.workspaceUsers.find((item) => item.id === ownerUserId);
+  return user?.name || ownerUserId;
+};
+
+const renderMessagingMode = () => {
+  const badgeEl = document.getElementById("messaging-mode-badge");
+  const providerEl = document.getElementById("messaging-mode-provider");
+  const reasonEl = document.getElementById("messaging-mode-reason");
+  if (!badgeEl || !providerEl || !reasonEl) {
+    return;
+  }
+
+  const mode = state.messagingMode;
+  if (!mode) {
+    badgeEl.textContent = "crm_manual";
+    providerEl.textContent = "dry_run";
+    reasonEl.textContent = tr("messaging_mode_manual", "Modo CRM manual activo.");
+    return;
+  }
+
+  badgeEl.textContent = String(mode.resolvedMode || "crm_manual");
+  providerEl.textContent = String(mode.provider || "dry_run");
+  reasonEl.textContent = String(
+    mode.reason ||
+      (mode.resolvedMode === "cloud_api"
+        ? tr("messaging_mode_cloud", "Modo Cloud API activo.")
+        : tr("messaging_mode_manual", "Modo CRM manual activo.")),
+  );
+};
+
+const renderLeadOwnerSelect = () => {
+  const ownerSelectEl = document.getElementById("lead-owner-select");
+  if (!(ownerSelectEl instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  const previousValue = ownerSelectEl.value;
+  ownerSelectEl.innerHTML = "";
+
+  const unassignedOption = document.createElement("option");
+  unassignedOption.value = "";
+  unassignedOption.textContent = tr("unassigned_owner", "Sin asignar");
+  ownerSelectEl.appendChild(unassignedOption);
+
+  state.workspaceUsers.forEach((user) => {
+    const option = document.createElement("option");
+    option.value = user.id;
+    option.textContent = `${user.name} (${user.role})`;
+    ownerSelectEl.appendChild(option);
+  });
+
+  if (previousValue && Array.from(ownerSelectEl.options).some((option) => option.value === previousValue)) {
+    ownerSelectEl.value = previousValue;
+  }
+};
+
+const setActiveInboxFilter = () => {
+  const buttons = Array.from(document.querySelectorAll("[data-inbox-view]"));
+  buttons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.inboxView === state.leadInboxView);
+  });
+};
+
+const renderLeadInbox = () => {
+  setActiveInboxFilter();
+  const countsEl = document.getElementById("lead-inbox-counts");
+  const listEl = document.getElementById("lead-inbox-list");
+  if (!countsEl || !listEl) {
+    return;
+  }
+
+  const inbox = state.leadInbox;
+  if (!inbox) {
+    countsEl.textContent = "all:0 | my:0 | unassigned:0 | overdue:0";
+    listEl.innerHTML = `<li>${tr("inbox_empty", "Sin leads en esta bandeja.")}</li>`;
+    return;
+  }
+
+  const counts = inbox.counts || { all: 0, my: 0, unassigned: 0, overdue: 0 };
+  countsEl.textContent = `all:${counts.all || 0} | my:${counts.my || 0} | unassigned:${counts.unassigned || 0} | overdue:${counts.overdue || 0}`;
+  listEl.innerHTML = "";
+
+  if (!Array.isArray(inbox.leads) || inbox.leads.length === 0) {
+    listEl.innerHTML = `<li>${tr("inbox_empty", "Sin leads en esta bandeja.")}</li>`;
+    return;
+  }
+
+  inbox.leads.slice(0, 80).forEach((lead) => {
+    const li = document.createElement("li");
+    li.className = "list-row";
+
+    const meta = document.createElement("div");
+    meta.className = "row-meta";
+    const stage = String(lead.stage || "new");
+    const temperature = String(lead.healthTemperature || "warm");
+    const sla = lead.sla || {};
+    const overdue = sla.firstResponseBreached || sla.followupBreached ? " | SLA overdue" : "";
+    meta.textContent = `${lead.name || "Lead"} | ${lead.phoneE164 || "-"} | ${stage} | owner:${getOwnerLabel(lead.ownerUserId)} | health:${temperature}${overdue}`;
+
+    const actions = document.createElement("div");
+    actions.className = "btn-row";
+
+    const ownerSelect = document.createElement("select");
+    ownerSelect.className = "inline-select";
+    const ownerEmpty = document.createElement("option");
+    ownerEmpty.value = "";
+    ownerEmpty.textContent = tr("unassigned_owner", "Sin asignar");
+    ownerSelect.appendChild(ownerEmpty);
+    state.workspaceUsers.forEach((user) => {
+      const option = document.createElement("option");
+      option.value = user.id;
+      option.textContent = user.name;
+      ownerSelect.appendChild(option);
+    });
+    ownerSelect.value = lead.ownerUserId || "";
+
+    const assignBtn = document.createElement("button");
+    assignBtn.type = "button";
+    assignBtn.className = "btn-xs btn-ghost";
+    assignBtn.textContent = tr("label_owner", "Responsable");
+    assignBtn.addEventListener("click", async () => {
+      try {
+        await apiRequest(`/leads/${lead.id}/assign`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            ownerUserId: ownerSelect.value || null,
+          }),
+        });
+        setFeedback(tr("lead_assigned", "Asignacion de lead actualizada."));
+        await refreshData();
+      } catch (error) {
+        setFeedback(error.message, true);
+      }
+    });
+
+    actions.appendChild(ownerSelect);
+    actions.appendChild(assignBtn);
+
+    healthQuickEvents.forEach((config) => {
+      const eventBtn = document.createElement("button");
+      eventBtn.type = "button";
+      eventBtn.className = "btn-xs btn-ghost";
+      eventBtn.textContent = config.label;
+      eventBtn.addEventListener("click", async () => {
+        try {
+          await apiRequest(`/leads/${lead.id}/health-events`, {
+            method: "POST",
+            body: JSON.stringify({ event: config.event }),
+          });
+          setFeedback(tr("lead_health_updated", "Salud de lead actualizada."));
+          await refreshData();
+        } catch (error) {
+          setFeedback(error.message, true);
+        }
+      });
+      actions.appendChild(eventBtn);
+    });
+
+    li.appendChild(meta);
+    li.appendChild(actions);
+    listEl.appendChild(li);
+  });
+};
+
+const renderProductivity = () => {
+  const assignedEl = document.getElementById("kpi-assigned");
+  const overdueEl = document.getElementById("kpi-overdue");
+  const funnelEl = document.getElementById("productivity-funnel-list");
+  const agentsEl = document.getElementById("productivity-agents-list");
+  if (!assignedEl || !overdueEl || !funnelEl || !agentsEl) {
+    return;
+  }
+
+  const productivity = state.productivity;
+  if (!productivity) {
+    assignedEl.textContent = "0";
+    overdueEl.textContent = "0";
+    funnelEl.innerHTML = "<li>Sin datos</li>";
+    agentsEl.innerHTML = "<li>Sin datos</li>";
+    return;
+  }
+
+  assignedEl.textContent = String(productivity.totals?.assignedLeads || 0);
+  overdueEl.textContent = String(productivity.totals?.overdueLeads || 0);
+
+  const funnelLines = Array.isArray(productivity.stageFunnel)
+    ? productivity.stageFunnel.map((item) => `${item.stage}: ${item.count} (${item.percentage}%)`)
+    : [];
+  renderSimpleList(funnelEl, funnelLines.length ? funnelLines : ["Sin datos"]);
+
+  const agentLines = Array.isArray(productivity.agents)
+    ? productivity.agents
+        .slice(0, 8)
+        .map(
+          (item) =>
+            `${item.name} | assigned:${item.assignedLeads} | open:${item.openLeads} | won:${item.wonLeads} | overdue:${item.overdueLeads}`,
+        )
+    : [];
+  renderSimpleList(agentsEl, agentLines.length ? agentLines : ["Sin datos"]);
+};
+
+const renderCampaignPreflight = (preflight = state.campaignPreflight) => {
+  const statusEl = document.getElementById("campaign-preflight-status");
+  const listEl = document.getElementById("campaign-preflight-list");
+  if (!statusEl || !listEl) {
+    return;
+  }
+
+  if (!preflight) {
+    statusEl.textContent = tr("preflight_pending", "Preflight pendiente.");
+    statusEl.classList.remove("error");
+    listEl.innerHTML = "";
+    return;
+  }
+
+  const blockers = Array.isArray(preflight.blockers) ? preflight.blockers : [];
+  const recommendations = Array.isArray(preflight.recommendations) ? preflight.recommendations : [];
+  const main = preflight.canSend ? tr("preflight_ready", "Preflight ok.") : tr("preflight_blocked", "Preflight bloqueado.");
+  statusEl.textContent = `${main} riesgo ${preflight.risk?.level || "low"} (${preflight.risk?.score || 0})`;
+  statusEl.classList.toggle("error", !preflight.canSend);
+
+  const lines = [
+    `Opt-in: ${preflight.optedInRecipients}/${preflight.totalRecipients}`,
+    `No opt-in: ${preflight.nonOptedInRecipients} (${preflight.nonOptedInPercentage}%)`,
+    `Cuota: ${preflight.dailyQuota?.remaining ?? 0} restante`,
+    ...blockers,
+    ...recommendations,
+  ];
+  renderSimpleList(listEl, lines);
+};
+
 const renderStats = () => {
   document.getElementById("kpi-leads").textContent = String(state.leads.length);
   document.getElementById("kpi-optin").textContent = String(
-    state.leads.filter((lead) => lead.consentStatus === "opted_in").length,
+    state.leads.filter((lead) => isLeadOptedIn(lead)).length,
   );
   document.getElementById("kpi-campaigns").textContent = String(state.campaigns.length);
 };
@@ -382,8 +808,10 @@ const renderTemplates = () => {
 const renderRecipients = () => {
   const recipientsEl = document.getElementById("campaign-recipients");
   recipientsEl.innerHTML = "";
+  state.campaignPreflight = null;
+  renderCampaignPreflight(null);
 
-  const optedInLeads = state.leads.filter((lead) => lead.consentStatus === "opted_in");
+  const optedInLeads = state.leads.filter((lead) => isLeadOptedIn(lead));
   if (optedInLeads.length === 0) {
     recipientsEl.innerHTML = `<p>${tr("no_optedin_leads", "No opted_in leads.")}</p>`;
     return;
@@ -439,7 +867,7 @@ const renderReminders = () => {
       meta.className = "row-meta";
       meta.textContent = `${new Date(reminder.dueAt).toLocaleString()} | ${
         lead?.name || reminder.leadId
-      } | ${reminder.note}`;
+      } | ${reminder.status || "pending"} | ${reminder.note}`;
 
       const actions = document.createElement("div");
       actions.className = "btn-row";
@@ -488,8 +916,27 @@ const renderReminders = () => {
         }
       });
 
+      const completeBtn = document.createElement("button");
+      completeBtn.type = "button";
+      completeBtn.className = "btn-xs btn-ghost";
+      completeBtn.textContent = tr("btn_complete_reminder", "Completar");
+      completeBtn.disabled = reminder.status === "done";
+      completeBtn.addEventListener("click", async () => {
+        try {
+          await apiRequest(`/reminders/${reminder.id}/complete`, {
+            method: "PATCH",
+            body: JSON.stringify({}),
+          });
+          setFeedback(tr("reminder_completed", "Recordatorio completado."));
+          await refreshData();
+        } catch (error) {
+          setFeedback(error.message, true);
+        }
+      });
+
       actions.appendChild(calendarBtn);
       actions.appendChild(chatBtn);
+      actions.appendChild(completeBtn);
       li.appendChild(meta);
       li.appendChild(actions);
       listEl.appendChild(li);
@@ -604,7 +1051,13 @@ const leadMatchesSegment = (lead, segment) => {
   }
   if (segment.type === "agent") {
     const needle = slugTag(value);
-    return tags.some((tag) => tag === `agent_${needle}` || tag === `asesor_${needle}` || tag === needle);
+    const ownerLabel = slugTag(getOwnerLabel(lead.ownerUserId));
+    const ownerId = slugTag(lead.ownerUserId || "");
+    return (
+      ownerLabel.includes(needle) ||
+      ownerId.includes(needle) ||
+      tags.some((tag) => tag === `agent_${needle}` || tag === `asesor_${needle}` || tag === needle)
+    );
   }
 
   const needle = slugTag(value);
@@ -700,6 +1153,10 @@ const renderSegmentLeads = () => {
       form.elements.namedItem("stage").value = lead.stage || "new";
       form.elements.namedItem("consentSource").value = lead.consentSource || "manual";
       form.elements.namedItem("tags").value = Array.isArray(lead.tags) ? lead.tags.join(", ") : "";
+      const ownerField = form.elements.namedItem("ownerUserId");
+      if (ownerField) {
+        ownerField.value = lead.ownerUserId || "";
+      }
     });
 
     const openBtn = document.createElement("button");
@@ -730,24 +1187,59 @@ const refreshSubscription = async () => {
   renderSubscription();
 };
 
+const fetchLeadInbox = async (view = state.leadInboxView) => {
+  const safeView = inboxViews.includes(view) ? view : "my";
+  const response = await apiRequest(`/leads/inbox?view=${encodeURIComponent(safeView)}`);
+  state.leadInboxView = safeView;
+  state.leadInbox = response.inbox || null;
+};
+
 const refreshData = async () => {
-  const [leadsData, templatesData, campaignsData, remindersData] = await Promise.all([
+  const safeView = inboxViews.includes(state.leadInboxView) ? state.leadInboxView : "my";
+  const [
+    leadsData,
+    templatesData,
+    campaignsData,
+    remindersData,
+    complianceData,
+    usersData,
+    inboxData,
+    analyticsData,
+    modeData,
+  ] = await Promise.all([
     apiRequest("/leads"),
     apiRequest("/templates"),
     apiRequest("/campaigns"),
     apiRequest("/reminders"),
+    apiRequest("/compliance/trust-center"),
+    apiRequest("/auth/users"),
+    apiRequest(`/leads/inbox?view=${encodeURIComponent(safeView)}`),
+    apiRequest("/analytics/productivity"),
+    apiRequest("/compliance/messaging-mode"),
   ]);
 
   state.leads = leadsData.leads || [];
   state.templates = templatesData.templates || [];
   state.campaigns = campaignsData.campaigns || [];
   state.reminders = remindersData.reminders || [];
+  state.trustCenter = complianceData.trustCenter || null;
+  state.workspaceUsers = usersData.users || [];
+  state.leadInbox = inboxData.inbox || null;
+  state.leadInboxView = state.leadInbox?.view || safeView;
+  state.productivity = analyticsData.productivity || null;
+  state.messagingMode = modeData.mode || null;
 
   renderStats();
+  renderTrustCenter();
+  renderMessagingMode();
+  renderLeadOwnerSelect();
   renderTemplates();
   renderRecipients();
+  renderCampaignPreflight();
   renderReminders();
   renderPipeline();
+  renderLeadInbox();
+  renderProductivity();
   renderSegmentTabs();
   renderSegmentLeads();
 };
@@ -767,6 +1259,16 @@ const bootstrapAuthenticated = async () => {
     await refreshData();
     setFeedback(tr("session_active", "Sesion activa y CRM habilitado."));
   } else {
+    state.trustCenter = null;
+    state.messagingMode = null;
+    state.leadInbox = null;
+    state.workspaceUsers = [];
+    state.productivity = null;
+    renderTrustCenter();
+    renderMessagingMode();
+    renderLeadOwnerSelect();
+    renderLeadInbox();
+    renderProductivity();
     setFeedback(tr("subscription_inactive_feedback", "Suscripcion inactiva. Solicita activacion al administrador."), true);
   }
 };
@@ -776,14 +1278,27 @@ const resetState = () => {
   state.authUser = null;
   state.workspace = null;
   state.subscription = null;
+  state.trustCenter = null;
+  state.messagingMode = null;
+  state.campaignPreflight = null;
+  state.leadInbox = null;
+  state.leadInboxView = "my";
   state.leads = [];
   state.templates = [];
   state.campaigns = [];
   state.reminders = [];
+  state.workspaceUsers = [];
+  state.productivity = null;
   state.segments = [];
   state.activeSegmentId = "all";
   renderSession();
   renderSubscription();
+  renderTrustCenter();
+  renderMessagingMode();
+  renderLeadOwnerSelect();
+  renderCampaignPreflight(null);
+  renderLeadInbox();
+  renderProductivity();
   renderSegmentTabs();
   renderSegmentLeads();
   setCrmVisibility(false);
@@ -926,6 +1441,20 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
   }
 });
 
+document.getElementById("backend-config-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const raw = String(data.get("backendUrl") || "").trim();
+  const normalized = normalizeApiBaseUrl(raw);
+  if (!normalized) {
+    setFeedback(tr("backend_invalid_url", "URL de backend invalida."), true);
+    return;
+  }
+
+  await persistApiBaseUrl(normalized);
+  setFeedback(tr("backend_saved", "BACKEND_URL actualizada."));
+});
+
 document.getElementById("lead-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -937,6 +1466,7 @@ document.getElementById("lead-form").addEventListener("submit", async (event) =>
     consentStatus: String(data.get("consentStatus") || "pending"),
     consentSource: String(data.get("consentSource") || "manual").trim(),
     stage: String(data.get("stage") || "new"),
+    ownerUserId: String(data.get("ownerUserId") || "").trim() || null,
     tags: tagsRaw
       .split(",")
       .map((item) => slugTag(item))
@@ -978,32 +1508,69 @@ document.getElementById("template-form").addEventListener("submit", async (event
   }
 });
 
-document.getElementById("campaign-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
+const buildCampaignPayloadFromForm = (form) => {
   const data = new FormData(form);
   const recipientLeadIds = Array.from(document.querySelectorAll("input[name='recipientLeadId']:checked")).map(
     (checkbox) => checkbox.value,
   );
   const optedInLeadIds = new Set(
     state.leads
-      .filter((lead) => lead.consentStatus === "opted_in")
+      .filter((lead) => isLeadOptedIn(lead))
       .map((lead) => String(lead.id || "")),
   );
   const safeRecipientLeadIds = recipientLeadIds.filter((leadId) => optedInLeadIds.has(String(leadId || "")));
-
   if (safeRecipientLeadIds.length === 0) {
-    setFeedback(tr("campaign_recipients_required", "Selecciona al menos un lead opted_in."), true);
-    return;
+    throw new Error(tr("campaign_recipients_required", "Selecciona al menos un lead opted_in."));
   }
 
-  const payload = {
+  return {
     name: String(data.get("name") || "").trim(),
     templateId: String(data.get("templateId") || "").trim(),
     recipientLeadIds: safeRecipientLeadIds,
   };
+};
+
+const runCampaignPreflight = async (payload) => {
+  const preflightData = await apiRequest("/campaigns/preflight", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  state.campaignPreflight = preflightData.preflight || null;
+  renderCampaignPreflight(state.campaignPreflight);
+  return state.campaignPreflight;
+};
+
+document.getElementById("campaign-preflight-btn")?.addEventListener("click", async () => {
+  const form = document.getElementById("campaign-form");
+  if (!(form instanceof HTMLFormElement)) {
+    return;
+  }
 
   try {
+    const payload = buildCampaignPayloadFromForm(form);
+    const preflight = await runCampaignPreflight(payload);
+    if (!preflight?.canSend) {
+      setFeedback(tr("preflight_blocked", "Preflight bloqueo la campana."), true);
+      return;
+    }
+    setFeedback(tr("preflight_ready", "Preflight ok."));
+  } catch (error) {
+    setFeedback(error.message, true);
+  }
+});
+
+document.getElementById("campaign-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+
+  try {
+    const payload = buildCampaignPayloadFromForm(form);
+    const preflight = await runCampaignPreflight(payload);
+    if (!preflight?.canSend) {
+      setFeedback(tr("preflight_blocked", "Preflight bloqueo la campana."), true);
+      return;
+    }
+
     const created = await apiRequest("/campaigns", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -1014,6 +1581,8 @@ document.getElementById("campaign-form").addEventListener("submit", async (event
     });
 
     form.reset();
+    state.campaignPreflight = null;
+    renderCampaignPreflight(null);
     setFeedback(tr("campaign_sent", "Campaign sent."));
     await refreshData();
   } catch (error) {
@@ -1084,6 +1653,37 @@ document.getElementById("segment-form")?.addEventListener("submit", async (event
   renderSegmentTabs();
   renderSegmentLeads();
   setFeedback(tr("segment_saved", "Pestana guardada."));
+});
+
+document.getElementById("lead-inbox-filters")?.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const button = target.closest("[data-inbox-view]");
+  if (!(button instanceof HTMLElement)) {
+    return;
+  }
+
+  const view = String(button.dataset.inboxView || "").trim();
+  if (!inboxViews.includes(view)) {
+    return;
+  }
+
+  state.leadInboxView = view;
+  setActiveInboxFilter();
+
+  if (!state.token || !state.subscription?.canUseCrm) {
+    return;
+  }
+
+  try {
+    await fetchLeadInbox(view);
+    renderLeadInbox();
+  } catch (error) {
+    setFeedback(error.message, true);
+  }
 });
 
 document.getElementById("unsaved-form")?.addEventListener("submit", (event) => {
@@ -1174,26 +1774,32 @@ languageSelectEl?.addEventListener("change", async () => {
   state.language = ["es", "en", "pt"].includes(languageSelectEl.value) ? languageSelectEl.value : "es";
   await storageSet({ [LANG_STORAGE_KEY]: state.language });
   applyTranslations();
+  renderBackendConfig();
   renderSession();
   renderSubscription();
+  renderTrustCenter();
+  renderMessagingMode();
+  renderLeadOwnerSelect();
   renderTemplates();
   renderRecipients();
+  renderCampaignPreflight();
   renderReminders();
   renderPipeline();
+  renderLeadInbox();
+  renderProductivity();
   renderSegmentTabs();
   renderSegmentLeads();
 });
 
 const bootstrap = async () => {
-  const shared = await storageGet(["crm_token", LANG_STORAGE_KEY, SEGMENTS_STORAGE_KEY, ACTIVE_SEGMENT_STORAGE_KEY]);
-
-  // Limpia configuraciones legacy para evitar que un valor manual roto bloquee el CRM.
-  localStorage.removeItem("crm_api_base_url");
-  localStorage.removeItem("crm_google_client_id");
-  localStorage.removeItem("crm_firebase_web_api_key");
-  if (hasChromeStorage) {
-    chrome.storage.local.remove(["crm_api_base_url", "crm_google_client_id", "crm_firebase_web_api_key"]);
-  }
+  const shared = await storageGet([
+    "crm_token",
+    LANG_STORAGE_KEY,
+    SEGMENTS_STORAGE_KEY,
+    ACTIVE_SEGMENT_STORAGE_KEY,
+    BACKEND_URL_STORAGE_KEY,
+    "crm_api_base_url",
+  ]);
 
   if (typeof shared.crm_token === "string" && shared.crm_token.trim()) {
     state.token = shared.crm_token.trim();
@@ -1204,12 +1810,27 @@ const bootstrap = async () => {
   state.segmentsStore = normalizeSegmentsStore(shared[SEGMENTS_STORAGE_KEY]);
   state.activeSegmentId = String(shared[ACTIVE_SEGMENT_STORAGE_KEY] || "all");
 
-  state.apiBaseUrl = DEFAULT_API_BASE_URL;
+  const configuredUrl =
+    shared[BACKEND_URL_STORAGE_KEY] ||
+    shared.crm_api_base_url ||
+    localStorage.getItem(BACKEND_URL_STORAGE_KEY) ||
+    localStorage.getItem("crm_api_base_url") ||
+    DEFAULT_API_BASE_URL;
+  state.apiBaseUrl = normalizeApiBaseUrl(configuredUrl) || DEFAULT_API_BASE_URL;
+  await persistApiBaseUrl(state.apiBaseUrl);
+
   applyTranslations();
+  renderBackendConfig();
   setCrmVisibility(false);
   applyWorkspaceSegments();
   renderSession();
   renderSubscription();
+  renderTrustCenter();
+  renderMessagingMode();
+  renderLeadOwnerSelect();
+  renderCampaignPreflight(null);
+  renderLeadInbox();
+  renderProductivity();
   renderSegmentTabs();
   renderSegmentLeads();
 

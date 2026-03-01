@@ -2,11 +2,14 @@ import type { EnvConfig } from "../../config/env.js";
 import { AppError } from "../../core/errors.js";
 import { createId } from "../../core/id.js";
 import { sleep } from "../../core/sleep.js";
+import type { AuditService } from "../audit/audit.service.js";
+import type { AuditActor } from "../audit/audit.types.js";
 import type { LeadsRepository } from "../leads/leads.repository.js";
+import { isLeadOptedIn } from "../leads/leads.types.js";
 import type { Template } from "../templates/templates.types.js";
 import type { TemplatesRepository } from "../templates/templates.repository.js";
 import type { WhatsAppService } from "../whatsapp/whatsapp.service.js";
-import type { Campaign, CampaignSendResult } from "./campaigns.types.js";
+import type { Campaign, CampaignPreflight, CampaignSendResult } from "./campaigns.types.js";
 import { createCampaignSchema } from "./campaigns.types.js";
 import type { CampaignsRepository } from "./campaigns.repository.js";
 
@@ -17,9 +20,10 @@ export class CampaignsService {
     private readonly templatesRepository: TemplatesRepository,
     private readonly whatsappService: WhatsAppService,
     private readonly env: EnvConfig,
+    private readonly auditService: AuditService,
   ) {}
 
-  public async createCampaign(workspaceId: string, input: unknown): Promise<Campaign> {
+  public async createCampaign(workspaceId: string, actor: AuditActor | null, input: unknown): Promise<Campaign> {
     const payload = createCampaignSchema.parse(input);
     const template = await this.templatesRepository.findById(workspaceId, payload.templateId);
     if (!template) {
@@ -40,7 +44,7 @@ export class CampaignsService {
     }
 
     const now = new Date().toISOString();
-    return this.campaignsRepository.create({
+    const campaign = await this.campaignsRepository.create({
       id: createId("cmp"),
       workspaceId,
       name: payload.name,
@@ -53,14 +57,108 @@ export class CampaignsService {
       updatedAt: now,
       lastRunAt: null,
     });
+
+    await this.safeAudit(workspaceId, actor, {
+      scope: "campaign",
+      action: "created",
+      entityType: "campaign",
+      entityId: campaign.id,
+      summary: `Campana creada: ${campaign.name}`,
+      details: {
+        recipients: campaign.recipientLeadIds.length,
+        templateId: campaign.templateId,
+      },
+    });
+
+    return campaign;
   }
 
   public async listCampaigns(workspaceId: string): Promise<Campaign[]> {
     return this.campaignsRepository.list(workspaceId);
   }
 
+  public async preflightDraftCampaign(
+    workspaceId: string,
+    actor: AuditActor | null,
+    input: unknown,
+  ): Promise<CampaignPreflight> {
+    const payload = createCampaignSchema.parse(input);
+    const template = await this.templatesRepository.findById(workspaceId, payload.templateId);
+    if (!template) {
+      throw new AppError({
+        statusCode: 404,
+        code: "NOT_FOUND",
+        message: "Template no encontrado",
+      });
+    }
+
+    const draftCampaign: Campaign = {
+      id: "draft_preflight",
+      workspaceId,
+      name: payload.name,
+      templateId: payload.templateId,
+      recipientLeadIds: payload.recipientLeadIds,
+      status: "draft",
+      sentCount: 0,
+      failedCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      lastRunAt: null,
+    };
+
+    const preflight = await this.evaluateCampaignCompliance(workspaceId, draftCampaign);
+    await this.safeAudit(workspaceId, actor, {
+      scope: "campaign",
+      action: "preflight_checked",
+      entityType: "campaign",
+      entityId: null,
+      summary: `Preflight de borrador: ${payload.name}`,
+      details: {
+        canSend: preflight.canSend,
+        blockers: preflight.blockers,
+        riskScore: preflight.risk.score,
+        recipients: payload.recipientLeadIds.length,
+      },
+    });
+
+    return preflight;
+  }
+
+  public async preflightCampaign(
+    workspaceId: string,
+    actor: AuditActor | null,
+    campaignId: string,
+  ): Promise<CampaignPreflight> {
+    const campaign = await this.campaignsRepository.findById(workspaceId, campaignId);
+    if (!campaign) {
+      throw new AppError({
+        statusCode: 404,
+        code: "NOT_FOUND",
+        message: "Campana no encontrada",
+      });
+    }
+
+    const preflight = await this.evaluateCampaignCompliance(workspaceId, campaign);
+    await this.safeAudit(workspaceId, actor, {
+      scope: "campaign",
+      action: "preflight_checked",
+      entityType: "campaign",
+      entityId: campaign.id,
+      summary: `Preflight de campana ${campaign.name}`,
+      details: {
+        canSend: preflight.canSend,
+        blockers: preflight.blockers,
+        riskScore: preflight.risk.score,
+        nonOptedInPercentage: preflight.nonOptedInPercentage,
+      },
+    });
+
+    return preflight;
+  }
+
   public async sendCampaign(
     workspaceId: string,
+    actor: AuditActor | null,
     campaignId: string,
   ): Promise<{ campaign: Campaign; results: CampaignSendResult[] }> {
     const campaign = await this.campaignsRepository.findById(workspaceId, campaignId);
@@ -80,6 +178,18 @@ export class CampaignsService {
       });
     }
 
+    const preflight = await this.evaluateCampaignCompliance(workspaceId, campaign);
+    if (!preflight.canSend) {
+      throw new AppError({
+        statusCode: 409,
+        code: "CONFLICT",
+        message: "Campana bloqueada por preflight de cumplimiento",
+        details: {
+          preflight,
+        },
+      });
+    }
+
     const template = await this.templatesRepository.findById(workspaceId, campaign.templateId);
     if (!template) {
       throw new AppError({
@@ -91,15 +201,10 @@ export class CampaignsService {
 
     const leadRecords = await this.leadsRepository.findManyByIds(workspaceId, campaign.recipientLeadIds);
     const leadById = new Map(leadRecords.map((lead) => [lead.id, lead]));
-    const optedInRecipientCount = campaign.recipientLeadIds.reduce((acc, leadId) => {
-      const lead = leadId ? leadById.get(leadId) : null;
-      return lead && lead.consentStatus === "opted_in" ? acc + 1 : acc;
-    }, 0);
+    const optedInRecipientCount = preflight.optedInRecipients;
 
-    const nowIso = new Date().toISOString();
-    const dayKey = this.getDayKeyUtc(nowIso);
-    const sentToday = await this.campaignsRepository.countSentMessagesForDay(workspaceId, dayKey);
-    const remainingDailyQuota = Math.max(0, this.env.maxCampaignMessagesPerDay - sentToday);
+    const sentToday = preflight.dailyQuota.sentToday;
+    const remainingDailyQuota = preflight.dailyQuota.remaining;
     if (optedInRecipientCount > remainingDailyQuota) {
       throw new AppError({
         statusCode: 429,
@@ -114,6 +219,7 @@ export class CampaignsService {
       });
     }
 
+    const nowIso = new Date().toISOString();
     await this.campaignsRepository.update(workspaceId, campaignId, {
       status: "sending",
       lastRunAt: nowIso,
@@ -167,7 +273,7 @@ export class CampaignsService {
           error: result.error,
           sentAt,
         });
-      } else if (lead.consentStatus !== "opted_in") {
+      } else if (!isLeadOptedIn(lead)) {
         failedCount += 1;
         const result: CampaignSendResult = {
           leadId: lead.id,
@@ -245,7 +351,159 @@ export class CampaignsService {
       });
     }
 
+    await this.safeAudit(workspaceId, actor, {
+      scope: "campaign",
+      action: "sent",
+      entityType: "campaign",
+      entityId: updated.id,
+      summary: `Campana ejecutada: ${updated.name}`,
+      details: {
+        finalStatus,
+        sentCount,
+        failedCount,
+      },
+    });
+
     return { campaign: updated, results };
+  }
+
+  private async evaluateCampaignCompliance(workspaceId: string, campaign: Campaign): Promise<CampaignPreflight> {
+    const leadRecords = await this.leadsRepository.findManyByIds(workspaceId, campaign.recipientLeadIds);
+    const leadById = new Map(leadRecords.map((lead) => [lead.id, lead]));
+
+    const totalRecipients = campaign.recipientLeadIds.length;
+    let optedInRecipients = 0;
+    let missingRecipients = 0;
+    let nonOptedInRecipients = 0;
+
+    campaign.recipientLeadIds.forEach((leadId) => {
+      if (!leadId) {
+        missingRecipients += 1;
+        nonOptedInRecipients += 1;
+        return;
+      }
+
+      const lead = leadById.get(leadId);
+      if (!lead) {
+        missingRecipients += 1;
+        nonOptedInRecipients += 1;
+        return;
+      }
+
+      if (isLeadOptedIn(lead)) {
+        optedInRecipients += 1;
+      } else {
+        nonOptedInRecipients += 1;
+      }
+    });
+
+    const nonOptedInPercentage =
+      totalRecipients > 0 ? Number(((nonOptedInRecipients / totalRecipients) * 100).toFixed(2)) : 0;
+    const nowIso = new Date().toISOString();
+    const dayKey = this.getDayKeyUtc(nowIso);
+    const sentToday = await this.campaignsRepository.countSentMessagesForDay(workspaceId, dayKey);
+    const remaining = Math.max(0, this.env.maxCampaignMessagesPerDay - sentToday);
+    const withinQuota = optedInRecipients <= remaining;
+    const exceedsNonOptInThreshold = nonOptedInPercentage > this.env.maxCampaignNonOptInPercent;
+
+    const blockers: string[] = [];
+    if (missingRecipients > 0) {
+      blockers.push(`Hay ${missingRecipients} destinatario(s) invalidos o inexistentes.`);
+    }
+    if (optedInRecipients === 0) {
+      blockers.push("No hay destinatarios con consentimiento opted_in.");
+    }
+    if (exceedsNonOptInThreshold) {
+      blockers.push(
+        `El ${nonOptedInPercentage}% del lote no tiene opt-in (max ${this.env.maxCampaignNonOptInPercent}%).`,
+      );
+    }
+    if (!withinQuota) {
+      blockers.push(
+        `Cuota diaria insuficiente. Restantes: ${remaining}, requeridos con opt-in: ${optedInRecipients}.`,
+      );
+    }
+
+    const riskReasons: string[] = [];
+    if (nonOptedInPercentage > 0) {
+      if (exceedsNonOptInThreshold) {
+        riskReasons.push("Porcentaje de no consentidos por encima del umbral permitido.");
+      } else {
+        riskReasons.push("Existen destinatarios sin opt-in en el lote.");
+      }
+    }
+    if (missingRecipients > 0) {
+      riskReasons.push("Hay destinatarios inexistentes o eliminados en la seleccion.");
+    }
+    if (!withinQuota) {
+      riskReasons.push("La cuota diaria de mensajes esta cerca o por encima del limite.");
+    }
+    if (optedInRecipients === 0) {
+      riskReasons.push("No existen contactos con consentimiento valido para enviar.");
+    }
+
+    let riskScore = 0;
+    if (exceedsNonOptInThreshold) {
+      riskScore += 55;
+    } else if (nonOptedInPercentage >= 10) {
+      riskScore += 30;
+    } else if (nonOptedInPercentage > 0) {
+      riskScore += 15;
+    }
+    if (missingRecipients > 0) {
+      riskScore += 20;
+    }
+    if (!withinQuota) {
+      riskScore += 30;
+    }
+    if (optedInRecipients === 0) {
+      riskScore += 40;
+    }
+    riskScore = Math.min(100, riskScore);
+
+    const recommendations = blockers.length
+      ? [
+          "Filtra solo leads con consentimiento registrado.",
+          "Corrige destinatarios invalidos antes de reenviar.",
+          "Reduce el lote o espera la renovacion de cuota diaria.",
+        ]
+      : ["Lote listo para envio compliant."];
+
+    return {
+      campaignId: campaign.id,
+      totalRecipients,
+      optedInRecipients,
+      missingRecipients,
+      nonOptedInRecipients,
+      nonOptedInPercentage,
+      nonOptedInThresholdPercentage: this.env.maxCampaignNonOptInPercent,
+      dailyQuota: {
+        maxPerDay: this.env.maxCampaignMessagesPerDay,
+        sentToday,
+        remaining,
+        attemptedOptedInRecipients: optedInRecipients,
+        withinQuota,
+      },
+      risk: {
+        score: riskScore,
+        level: this.toRiskLevel(riskScore),
+        reasons: riskReasons,
+      },
+      blockers,
+      recommendations,
+      canSend: blockers.length === 0,
+      evaluatedAt: nowIso,
+    };
+  }
+
+  private toRiskLevel(score: number): "low" | "medium" | "high" {
+    if (score <= 30) {
+      return "low";
+    }
+    if (score <= 65) {
+      return "medium";
+    }
+    return "high";
   }
 
   private getDayKeyUtc(isoDate: string): string {
@@ -254,5 +512,24 @@ export class CampaignsService {
 
   private interpolate(template: Template, leadName: string): string {
     return template.body.replaceAll("{{name}}", leadName);
+  }
+
+  private async safeAudit(
+    workspaceId: string,
+    actor: AuditActor | null,
+    input: {
+      scope: "campaign";
+      action: string;
+      entityType: string;
+      entityId?: string | null;
+      summary: string;
+      details?: Record<string, unknown>;
+    },
+  ): Promise<void> {
+    try {
+      await this.auditService.log(workspaceId, actor, input);
+    } catch (_error) {
+      // Avoid blocking CRM flows when audit log persistence is unavailable.
+    }
   }
 }

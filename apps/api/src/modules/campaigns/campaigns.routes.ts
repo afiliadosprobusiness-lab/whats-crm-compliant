@@ -6,9 +6,13 @@ export const createCampaignsRouter = (campaignsController: CampaignsController):
   const router = Router();
 
   router.get("/", asyncHandler(async (req, res) => campaignsController.listCampaigns(req, res)));
+  router.post("/preflight", asyncHandler(async (req, res) => campaignsController.preflightCampaignDraft(req, res)));
   router.post("/", asyncHandler(async (req, res) => campaignsController.createCampaign(req, res)));
+  router.post(
+    "/:campaignId/preflight",
+    asyncHandler(async (req, res) => campaignsController.preflightCampaign(req, res)),
+  );
   router.post("/:campaignId/send", asyncHandler(async (req, res) => campaignsController.sendCampaign(req, res)));
 
   return router;
 };
-

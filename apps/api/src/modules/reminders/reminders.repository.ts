@@ -17,5 +17,34 @@ export class RemindersRepository {
       .map((doc) => doc.data() as Reminder)
       .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   }
-}
 
+  public async findById(workspaceId: string, reminderId: string): Promise<Reminder | null> {
+    const snap = await this.db.collection(COLLECTION).doc(reminderId).get();
+    if (!snap.exists) {
+      return null;
+    }
+
+    const reminder = snap.data() as Reminder;
+    return reminder.workspaceId === workspaceId ? reminder : null;
+  }
+
+  public async updateReminder(
+    workspaceId: string,
+    reminderId: string,
+    patch: Partial<Reminder>,
+  ): Promise<Reminder | null> {
+    const reminder = await this.findById(workspaceId, reminderId);
+    if (!reminder) {
+      return null;
+    }
+
+    const updated: Reminder = {
+      ...reminder,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.db.collection(COLLECTION).doc(reminderId).set(updated);
+    return updated;
+  }
+}

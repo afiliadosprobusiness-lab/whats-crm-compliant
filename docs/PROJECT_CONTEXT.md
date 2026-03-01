@@ -26,20 +26,33 @@ Proyecto: `whatsapp-crm-compliant`
    - Upsert por telefono (`POST /api/v1/leads/upsert`) para evitar duplicados al operar desde WhatsApp Web.
    - Actualizacion parcial (`PATCH /api/v1/leads/:leadId`) de etapa/consentimiento/tags/nombre.
    - Cambio de etapa (`new`, `contacted`, `qualified`, `won`, `lost`).
+   - Bandejas operativas por vista (`GET /api/v1/leads/inbox` con `my/unassigned/overdue/all`).
+   - Asignacion de lead a agente (`PATCH /api/v1/leads/:leadId/assign`).
+   - Eventos de Health Score (`POST /api/v1/leads/:leadId/health-events`) con SLA de primera respuesta y seguimiento.
    - Notas por lead.
 4. Plantillas:
    - Creacion y listado.
 5. Campanas:
    - Creacion por plantilla + leads.
+   - Preflight de cumplimiento (`POST /api/v1/campaigns/preflight` y `POST /api/v1/campaigns/:campaignId/preflight`).
    - Envio con limite por minuto.
    - Limite diario por workspace para cumplimiento.
-   - Bloqueo para leads sin `opted_in`.
+   - Bloqueo para leads sin `opted_in` y bloqueo preventivo si >20% del lote no tiene opt-in.
 6. Recordatorios:
    - Creacion por lead con fecha/hora.
+   - Cierre manual trazable (`PATCH /api/v1/reminders/:reminderId/complete`).
    - Notificacion de escritorio en Chrome cuando el recordatorio vence (sin auto-envio).
-7. Webhooks:
+7. Compliance:
+   - `Trust Center` (`GET /api/v1/compliance/trust-center`) con cobertura opt-in, cuota diaria, riesgo anti-spam y auditoria reciente.
+   - Estado de modo dual (`GET /api/v1/compliance/messaging-mode`) con `crm_manual` vs `cloud_api` y fallback explicito a `dry_run`.
+   - Rate limiter por usuario/minuto para acciones asistidas (`POST /api/v1/compliance/manual-assist`).
+8. Analytics:
+   - Dashboard de productividad (`GET /api/v1/analytics/productivity`) con funnel por etapa, conversion y leaderboard por agente.
+9. Auditoria:
+   - Bitacora `audit_logs` para eventos de leads/campanas/recordatorios/compliance.
+10. Webhooks:
    - Verificacion y recepcion de eventos de WhatsApp.
-8. Infra:
+11. Infra:
    - Persistencia Firestore para modulos core.
    - Runtime Vercel serverless (`apps/api/src/vercel.ts`).
 
@@ -47,7 +60,7 @@ Proyecto: `whatsapp-crm-compliant`
 
 - Popup unico con:
   - Marca de extension: `WhatsWidget` (by LeadWidget), con icono de LeadWidget en `apps/extension/icon.png`.
-  - Configuracion bloqueada a backend productivo (`https://whats-crm-compliant.vercel.app/api/v1`) para evitar errores por edicion manual.
+  - `BACKEND_URL` configurable desde popup (persistido en `crm_backend_url`) con fallback seguro a backend productivo.
   - Login/registro owner.
   - Panel embebido en `web.whatsapp.com` via content script (lead rapido, notas, recordatorios, insertar plantilla).
   - Panel embebido con selector de plantilla operativa por workspace (`General` o `Inmobiliaria`):
@@ -76,15 +89,26 @@ Proyecto: `whatsapp-crm-compliant`
   - Modulo `Importar CSV a CRM` (upsert de leads por telefono via API, sin scraping de WhatsApp).
   - Recordatorios en popup incluyen CTA a Google Calendar (link prellenado).
   - Popup endurece validaciones: campanas solo con seleccion valida de leads `opted_in` y recordatorios requieren fecha/hora valida.
+  - Popup agrega `Compliance Trust Center`: badge global `Compliant Mode ON`, cobertura opt-in, cuota diaria, riesgo anti-spam y auditoria reciente.
+  - Popup agrega bloque `Messaging Mode` para mostrar modo efectivo (`crm_manual`/`cloud_api`) y estado de `dry_run`.
+  - Popup agrega `Inbox multiagente` con filtros (`Mis leads`, `Sin asignar`, `Vencidos`, `Todos`), asignacion de owner y eventos rapidos de health score.
+  - Popup agrega `Dashboard de productividad` (KPIs operativos, funnel por etapa y resumen por agente).
+  - Popup ejecuta preflight antes de enviar campanas y muestra bloqueos/recomendaciones.
   - Selector de idioma en popup (`ES/EN/PT`).
   - Panel embebido incluye `Blur demo` para privacidad visual en demos.
-  - Panel embebido agrega `Copiloto asistido` (sugerencias/resumen/siguiente accion/derivacion), sin auto-envio.
+  - Panel embebido agrega `Copiloto asistido` (sugerencias/resumen/siguiente accion/derivacion), sin auto-envio y con rate limiter por usuario/minuto desde backend.
+  - Panel embebido muestra estado de cumplimiento (`Compliant Mode ON` + riesgo) en tiempo real.
+  - Panel embebido muestra `Messaging Mode` efectivo (`crm_manual`/`cloud_api`) y proveedor (`dry_run`/`whatsapp_cloud_api`).
+  - Panel embebido agrega `Bandeja multiagente` (Mis leads, Sin asignar, Vencidos, Todos) con asignacion de owner y health events rapidos.
+  - Panel embebido agrega bloque de `Productividad` (funnel por etapa y resumen de agentes con carga/vencidos).
 
 ## Estado
 
 - Funcional para cobro mensual y operacion real.
 - En WhatsApp Web no hay auto-envio: la extension inserta mensajes y el usuario confirma envio manual.
 - Seguimientos asistidos aplican control local de limite diario para cumplimiento (20 inserciones manuales por dia).
+- Copiloto asistido aplica control adicional backend por usuario/minuto (`MAX_MANUAL_ASSIST_ACTIONS_PER_MINUTE`).
+- El modo dual queda visible en tiempo real: si `CRM_MESSAGING_MODE=cloud_api` sin credenciales completas, la API cae a `crm_manual` + `dry_run`.
 - Superadmin externo puede reconciliar estado real de suscripcion por lote de correos via `POST /api/v1/admin/subscriptions-by-email`.
 - Firebase Auth Google requiere activar `Get started` + provider `Google` en Firebase Console si aun no se hizo.
 - Pendiente para robustez enterprise: cola de envios, observabilidad avanzada, billing automatizado real, rotacion de claves y backups operativos.

@@ -310,6 +310,13 @@ html.wacrm-blur-mode #wacrm-dock {
 .wacrm-stage-actions {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.wacrm-inline-select {
+  min-width: 120px;
+  flex: 1 1 140px;
 }
 
 .wacrm-kanban-board {

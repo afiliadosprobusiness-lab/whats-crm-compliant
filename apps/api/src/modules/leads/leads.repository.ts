@@ -1,7 +1,8 @@
 import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
-import type { Lead, LeadStage } from "./leads.types.js";
+import type { Lead, LeadHealthEvent, LeadStage } from "./leads.types.js";
 
 const COLLECTION = "leads";
+const HEALTH_EVENTS_COLLECTION = "lead_health_events";
 
 export class LeadsRepository {
   private readonly db = getFirebaseDb();
@@ -94,5 +95,21 @@ export class LeadsRepository {
   public async findManyByIds(workspaceId: string, leadIds: string[]): Promise<Lead[]> {
     const leads = await Promise.all(leadIds.map((leadId) => this.findById(workspaceId, leadId)));
     return leads.filter((lead): lead is Lead => lead !== null);
+  }
+
+  public async createHealthEvent(event: LeadHealthEvent): Promise<LeadHealthEvent> {
+    await this.db.collection(HEALTH_EVENTS_COLLECTION).doc(event.id).set(event);
+    return event;
+  }
+
+  public async listHealthEventsByWorkspace(workspaceId: string): Promise<LeadHealthEvent[]> {
+    const querySnap = await this.db
+      .collection(HEALTH_EVENTS_COLLECTION)
+      .where("workspaceId", "==", workspaceId)
+      .get();
+
+    return querySnap.docs
+      .map((doc) => doc.data() as LeadHealthEvent)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 }

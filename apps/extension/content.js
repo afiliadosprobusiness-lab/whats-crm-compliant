@@ -5,7 +5,9 @@
   window.__wacrmInjected = true;
 
   const DEFAULT_API_BASE_URL = "https://whats-crm-compliant.vercel.app/api/v1";
+  const BACKEND_URL_STORAGE_KEY = "crm_backend_url";
   const STORAGE_KEYS = [
+    BACKEND_URL_STORAGE_KEY,
     "crm_api_base_url",
     "crm_token",
     "crm_google_client_id",
@@ -22,6 +24,19 @@
   const FOLLOWUP_USAGE_RETENTION_DAYS = 45;
   const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"];
   const CONSENT_STATES = ["opted_in", "pending", "opted_out"];
+  const LEAD_INBOX_VIEWS = ["my", "unassigned", "overdue", "all"];
+  const LEAD_INBOX_LABELS = {
+    my: "Mis leads",
+    unassigned: "Sin asignar",
+    overdue: "Vencidos",
+    all: "Todos",
+  };
+  const LEAD_HEALTH_EVENT_SHORTCUTS = [
+    { event: "responded", label: "Respondio" },
+    { event: "appointment_set", label: "Cita" },
+    { event: "no_response_72h", label: "72h" },
+    { event: "spam_reported", label: "Spam" },
+  ];
   const CRM_BUILD_TAG = "0.4.8-2026-02-28";
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const PANEL_POSITION_KEY = "crm_panel_position_v1";
@@ -164,9 +179,15 @@
     me: null,
     subscription: null,
     canUseCrm: false,
+    trustCenter: null,
+    messagingMode: null,
     templates: [],
     leads: [],
     reminders: [],
+    workspaceUsers: [],
+    leadInbox: null,
+    leadInboxView: "my",
+    productivity: null,
     currentLead: null,
     currentChat: null,
     activeSection: "overview",
@@ -255,6 +276,25 @@
     }
 
     return response.json().catch(() => ({}));
+  };
+
+  const normalizeApiBaseUrl = (input) => {
+    const raw = String(input || "").trim();
+    if (!raw) {
+      return DEFAULT_API_BASE_URL;
+    }
+
+    try {
+      const candidate = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
+      const parsed = new URL(candidate);
+      const basePath = parsed.pathname.replace(/\/+$/, "");
+      parsed.pathname = basePath.endsWith("/api/v1") ? basePath : `${basePath || ""}/api/v1`;
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.toString().replace(/\/$/, "");
+    } catch (_error) {
+      return DEFAULT_API_BASE_URL;
+    }
   };
 
   const normalizePhone = (input) => {
@@ -865,6 +905,237 @@
     state.nodes.pipelineMetaEl.textContent = `Pipeline: ${counters.join(" | ")}`;
   };
 
+  const renderComplianceMeta = () => {
+    if (!state.nodes.complianceMetaEl) {
+      return;
+    }
+
+    const trustCenter = state.trustCenter;
+    if (!trustCenter) {
+      state.nodes.complianceMetaEl.textContent = "Compliant Mode ON | riesgo: low (0).";
+      return;
+    }
+
+    const risk = trustCenter.antiSpamRisk || { level: "low", score: 0, reasons: [] };
+    const coverage = trustCenter.optInCoverage || { percentage: 0 };
+    const quota = trustCenter.campaignDailyQuota || { remaining: 0, maxPerDay: 0 };
+    const base = `Compliant Mode ON | riesgo: ${risk.level} (${risk.score}) | opt-in: ${coverage.percentage}% | cuota: ${quota.remaining}/${quota.maxPerDay}`;
+    const reason = Array.isArray(risk.reasons) && risk.reasons.length ? ` | alerta: ${risk.reasons[0]}` : "";
+    state.nodes.complianceMetaEl.textContent = `${base}${reason}`.slice(0, 220);
+  };
+
+  const getOwnerLabel = (ownerUserId) => {
+    if (!ownerUserId) {
+      return "Sin asignar";
+    }
+    const user = state.workspaceUsers.find((item) => item.id === ownerUserId);
+    return user?.name || ownerUserId;
+  };
+
+  const isLeadOverdue = (lead) => {
+    return Boolean(lead?.sla?.firstResponseBreached || lead?.sla?.followupBreached);
+  };
+
+  const renderMessagingModeMeta = () => {
+    const modeEl = state.nodes.messagingModeMetaEl;
+    if (!modeEl) {
+      return;
+    }
+
+    const mode = state.messagingMode;
+    if (!mode) {
+      modeEl.textContent = "Modo: crm_manual | proveedor: dry_run.";
+      return;
+    }
+
+    const resolvedMode = String(mode.resolvedMode || "crm_manual");
+    const provider = String(mode.provider || "dry_run");
+    const reason = String(mode.reason || "").trim();
+    modeEl.textContent = reason
+      ? `Modo: ${resolvedMode} | proveedor: ${provider} | ${reason}`
+      : `Modo: ${resolvedMode} | proveedor: ${provider}`;
+  };
+
+  const renderOwnerSelect = () => {
+    const selectEl = state.nodes.ownerSelect;
+    if (!selectEl) {
+      return;
+    }
+
+    const previousValue = String(selectEl.value || "");
+    selectEl.innerHTML = "";
+
+    const unassigned = document.createElement("option");
+    unassigned.value = "";
+    unassigned.textContent = "Sin asignar";
+    selectEl.appendChild(unassigned);
+
+    state.workspaceUsers.forEach((user) => {
+      const option = document.createElement("option");
+      option.value = user.id;
+      option.textContent = `${user.name} (${user.role})`;
+      selectEl.appendChild(option);
+    });
+
+    const canRestore = Array.from(selectEl.options).some((option) => option.value === previousValue);
+    if (canRestore) {
+      selectEl.value = previousValue;
+    }
+  };
+
+  const renderTeamInbox = () => {
+    const filtersEl = state.nodes.inboxFiltersEl;
+    const countsEl = state.nodes.inboxCountsEl;
+    const listEl = state.nodes.inboxListEl;
+    if (!filtersEl || !countsEl || !listEl) {
+      return;
+    }
+
+    const activeView = LEAD_INBOX_VIEWS.includes(state.leadInboxView) ? state.leadInboxView : "my";
+    filtersEl.innerHTML = "";
+    LEAD_INBOX_VIEWS.forEach((view) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "wacrm-chip wacrm-filter-chip";
+      button.dataset.inboxView = view;
+      button.textContent = LEAD_INBOX_LABELS[view] || view;
+      button.classList.toggle("active", view === activeView);
+      filtersEl.appendChild(button);
+    });
+
+    const inbox = state.leadInbox;
+    if (!inbox) {
+      countsEl.textContent = "all:0 | my:0 | unassigned:0 | overdue:0";
+      listEl.innerHTML = "<p class=\"wacrm-meta\">Sin datos de bandeja.</p>";
+      return;
+    }
+
+    const counts = inbox.counts || { all: 0, my: 0, unassigned: 0, overdue: 0 };
+    countsEl.textContent = `all:${counts.all || 0} | my:${counts.my || 0} | unassigned:${counts.unassigned || 0} | overdue:${counts.overdue || 0}`;
+    listEl.innerHTML = "";
+
+    const leads = Array.isArray(inbox.leads) ? inbox.leads : [];
+    if (!leads.length) {
+      listEl.innerHTML = "<p class=\"wacrm-meta\">Sin leads en esta bandeja.</p>";
+      return;
+    }
+
+    leads.slice(0, 30).forEach((lead) => {
+      const row = document.createElement("div");
+      row.className = "wacrm-stage-row";
+
+      const info = document.createElement("button");
+      info.type = "button";
+      info.className = "wacrm-stage-lead";
+      const healthTemperature = String(lead.healthTemperature || "warm");
+      const healthScore = Number.isFinite(Number(lead.healthScore)) ? Number(lead.healthScore) : 50;
+      const overdueFlag = isLeadOverdue(lead) ? " | SLA overdue" : "";
+      info.innerHTML = `
+        <span class="wacrm-hot-name">${lead.name || "Sin nombre"}</span>
+        <span class="wacrm-hot-meta">${lead.stage || "new"} | owner: ${getOwnerLabel(lead.ownerUserId)} | health:${healthTemperature} (${healthScore})${overdueFlag}</span>
+      `;
+      info.addEventListener("click", () => {
+        fillLeadIntoForm(lead);
+        openSectionFromMenu("lead");
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "wacrm-stage-actions";
+
+      const ownerSelect = document.createElement("select");
+      ownerSelect.className = "wacrm-select wacrm-inline-select";
+      const ownerEmpty = document.createElement("option");
+      ownerEmpty.value = "";
+      ownerEmpty.textContent = "Sin asignar";
+      ownerSelect.appendChild(ownerEmpty);
+      state.workspaceUsers.forEach((user) => {
+        const option = document.createElement("option");
+        option.value = user.id;
+        option.textContent = user.name;
+        ownerSelect.appendChild(option);
+      });
+      ownerSelect.value = lead.ownerUserId || "";
+
+      const assignBtn = document.createElement("button");
+      assignBtn.type = "button";
+      assignBtn.className = "wacrm-btn ghost wacrm-btn-xs";
+      assignBtn.textContent = "Asignar";
+      assignBtn.addEventListener("click", () => {
+        void withSyncGuard(async () => {
+          await apiRequest(`/leads/${lead.id}/assign`, {
+            method: "PATCH",
+            body: JSON.stringify({ ownerUserId: ownerSelect.value || null }),
+          });
+          setStatus("Asignacion de lead actualizada.");
+          await fetchWorkspaceData();
+        });
+      });
+
+      actions.appendChild(ownerSelect);
+      actions.appendChild(assignBtn);
+
+      LEAD_HEALTH_EVENT_SHORTCUTS.forEach((config) => {
+        const eventBtn = document.createElement("button");
+        eventBtn.type = "button";
+        eventBtn.className = "wacrm-btn ghost wacrm-btn-xs";
+        eventBtn.textContent = config.label;
+        eventBtn.addEventListener("click", () => {
+          void withSyncGuard(async () => {
+            await apiRequest(`/leads/${lead.id}/health-events`, {
+              method: "POST",
+              body: JSON.stringify({ event: config.event }),
+            });
+            setStatus(`Health event aplicado: ${config.label}.`);
+            await fetchWorkspaceData();
+          });
+        });
+        actions.appendChild(eventBtn);
+      });
+
+      row.appendChild(info);
+      row.appendChild(actions);
+      listEl.appendChild(row);
+    });
+  };
+
+  const renderProductivityPanel = () => {
+    const metaEl = state.nodes.productivityMetaEl;
+    const listEl = state.nodes.productivityListEl;
+    if (!metaEl || !listEl) {
+      return;
+    }
+
+    const productivity = state.productivity;
+    if (!productivity) {
+      metaEl.textContent = "Sin datos de productividad.";
+      listEl.innerHTML = "<p class=\"wacrm-meta\">Sin datos.</p>";
+      return;
+    }
+
+    const totals = productivity.totals || {};
+    metaEl.textContent = `Leads:${totals.leads || 0} | asignados:${totals.assignedLeads || 0} | sin asignar:${totals.unassignedLeads || 0} | vencidos:${totals.overdueLeads || 0}`;
+    listEl.innerHTML = "";
+
+    const stageFunnel = Array.isArray(productivity.stageFunnel) ? productivity.stageFunnel : [];
+    const topAgents = Array.isArray(productivity.agents) ? productivity.agents.slice(0, 5) : [];
+    const lines = [
+      ...stageFunnel.map((item) => `${item.stage}: ${item.count} (${item.percentage}%)`),
+      ...topAgents.map((item) => `${item.name} | assigned:${item.assignedLeads} | won:${item.wonLeads} | overdue:${item.overdueLeads}`),
+    ];
+
+    if (!lines.length) {
+      listEl.innerHTML = "<p class=\"wacrm-meta\">Sin datos.</p>";
+      return;
+    }
+
+    lines.forEach((line) => {
+      const row = document.createElement("p");
+      row.className = "wacrm-meta";
+      row.textContent = line;
+      listEl.appendChild(row);
+    });
+  };
+
   const appendTagToInput = (tag) => {
     const current = parseCsvTags(state.nodes.tagsInput?.value || "");
     const merged = mergeTags(current, [tag]);
@@ -908,6 +1179,7 @@
     if (state.nodes.phoneInput) state.nodes.phoneInput.value = lead.phoneE164 || "";
     if (state.nodes.stageSelect) state.nodes.stageSelect.value = lead.stage || "new";
     if (state.nodes.consentSelect) state.nodes.consentSelect.value = lead.consentStatus || "pending";
+    if (state.nodes.ownerSelect) state.nodes.ownerSelect.value = lead.ownerUserId || "";
     if (state.nodes.tagsInput) state.nodes.tagsInput.value = (lead.tags || []).join(", ");
     if (state.templateMode === "real_estate") {
       fillProfileForm(parseProfileNote(lead));
@@ -1403,6 +1675,9 @@
 
     if (!state.currentLead) {
       state.nodes.leadMetaEl.textContent = "Sin lead asociado al chat actual.";
+      if (state.nodes.ownerSelect) {
+        state.nodes.ownerSelect.value = "";
+      }
       state.nodes.noteBtn.disabled = true;
       state.nodes.stageBtn.disabled = true;
       state.nodes.reminderBtn.disabled = true;
@@ -1419,7 +1694,11 @@
     const tagsText = Array.isArray(state.currentLead.tags) && state.currentLead.tags.length > 0
       ? state.currentLead.tags.join(", ")
       : "-";
-    state.nodes.leadMetaEl.textContent = `Lead: ${state.currentLead.name} | etapa: ${getLeadPipelineLabel(state.currentLead)} | tags: ${tagsText}`;
+    const owner = getOwnerLabel(state.currentLead.ownerUserId);
+    const healthTemperature = String(state.currentLead.healthTemperature || "warm");
+    const healthScore = Number.isFinite(Number(state.currentLead.healthScore)) ? Number(state.currentLead.healthScore) : 50;
+    state.nodes.leadMetaEl.textContent =
+      `Lead: ${state.currentLead.name} | etapa: ${getLeadPipelineLabel(state.currentLead)} | owner: ${owner} | health:${healthTemperature} (${healthScore}) | tags: ${tagsText}`;
     state.nodes.noteBtn.disabled = false;
     state.nodes.stageBtn.disabled = false;
     state.nodes.reminderBtn.disabled = false;
@@ -1446,6 +1725,9 @@
       state.nodes.stageSelect.value = state.currentLead.stage;
       if (state.nodes.consentSelect) {
         state.nodes.consentSelect.value = state.currentLead.consentStatus;
+      }
+      if (state.nodes.ownerSelect) {
+        state.nodes.ownerSelect.value = state.currentLead.ownerUserId || "";
       }
       if (state.nodes.tagsInput) {
         state.nodes.tagsInput.value = (state.currentLead.tags || []).join(", ");
@@ -1605,9 +1887,14 @@
       applyWorkspaceTemplateMode();
       state.subscription = null;
       state.canUseCrm = false;
+      state.trustCenter = null;
+      state.messagingMode = null;
       state.templates = [];
       state.leads = [];
       state.reminders = [];
+      state.workspaceUsers = [];
+      state.leadInbox = null;
+      state.productivity = null;
       state.currentLead = null;
       renderTemplates();
       fillProfileForm(null);
@@ -1621,6 +1908,11 @@
       setModeState();
       updateLeadMeta();
       updatePipelineMeta();
+      renderComplianceMeta();
+      renderMessagingModeMeta();
+      renderOwnerSelect();
+      renderTeamInbox();
+      renderProductivityPanel();
       await refreshFollowupMeta();
       return;
     }
@@ -1635,9 +1927,14 @@
     state.canUseCrm = Boolean(state.subscription?.canUseCrm);
 
     if (!state.canUseCrm) {
+      state.trustCenter = null;
+      state.messagingMode = null;
       state.templates = [];
       state.leads = [];
       state.reminders = [];
+      state.workspaceUsers = [];
+      state.leadInbox = null;
+      state.productivity = null;
       state.currentLead = null;
       renderTemplates();
       renderHotLeads();
@@ -1649,22 +1946,51 @@
       renderStageLeads();
       updateLeadMeta();
       updatePipelineMeta();
+      renderComplianceMeta();
+      renderMessagingModeMeta();
+      renderOwnerSelect();
+      renderTeamInbox();
+      renderProductivityPanel();
       setModeState();
       await refreshFollowupMeta();
       setStatus("Sesion activa, pero suscripcion inactiva.", true);
       return;
     }
 
-    const [templatesData, leadsData, remindersData] = await Promise.all([
+    const safeView = LEAD_INBOX_VIEWS.includes(state.leadInboxView) ? state.leadInboxView : "my";
+    const [
+      templatesData,
+      leadsData,
+      remindersData,
+      trustCenterData,
+      usersData,
+      inboxData,
+      productivityData,
+      modeData,
+    ] = await Promise.all([
       apiRequest("/templates"),
       apiRequest("/leads"),
       apiRequest("/reminders"),
+      apiRequest("/compliance/trust-center"),
+      apiRequest("/auth/users"),
+      apiRequest(`/leads/inbox?view=${encodeURIComponent(safeView)}`),
+      apiRequest("/analytics/productivity"),
+      apiRequest("/compliance/messaging-mode"),
     ]);
     state.templates = templatesData.templates || [];
     state.leads = leadsData.leads || [];
     state.reminders = remindersData.reminders || [];
+    state.trustCenter = trustCenterData.trustCenter || null;
+    state.workspaceUsers = usersData.users || [];
+    state.leadInbox = inboxData.inbox || null;
+    state.leadInboxView = state.leadInbox?.view || safeView;
+    state.productivity = productivityData.productivity || null;
+    state.messagingMode = modeData.mode || null;
     renderTemplates();
     updatePipelineMeta();
+    renderComplianceMeta();
+    renderMessagingModeMeta();
+    renderOwnerSelect();
     renderHotLeads();
     renderCustomStageMeta();
     applyTemplateModeUI();
@@ -1672,11 +1998,18 @@
     renderStageShortcuts();
     renderStageFilters();
     renderStageLeads();
+    renderTeamInbox();
+    renderProductivityPanel();
     syncLeadWithPhone();
     await refreshFollowupMeta();
     setModeState();
     const modeLabel = state.templateMode === "real_estate" ? "Inmobiliaria" : "General";
-    setStatus(`CRM activo (${modeLabel}) para ${state.me?.email || "workspace actual"}.`);
+    const riskLevel = String(state.trustCenter?.antiSpamRisk?.level || "low");
+    const riskScore = Number(state.trustCenter?.antiSpamRisk?.score || 0);
+    const messagingMode = String(state.messagingMode?.resolvedMode || "crm_manual");
+    setStatus(
+      `CRM activo (${modeLabel}) para ${state.me?.email || "workspace actual"} | compliance: ${riskLevel} (${riskScore}) | mode:${messagingMode}.`,
+    );
   };
 
   const insertMessageIntoComposer = (message) => {
@@ -1745,7 +2078,35 @@
     return `Hola ${name}, ${opening}${reminderLine} Si te parece, hoy avanzamos con los siguientes pasos y te envio opciones concretas.`;
   };
 
-  const runCopilot = (mode) => {
+  const trackManualAssist = async (action, context = "") => {
+    const payload = {
+      action,
+      context: String(context || "").trim().slice(0, 80),
+    };
+    return apiRequest("/compliance/manual-assist", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  };
+
+  const runCopilot = async (mode) => {
+    const actionByMode = {
+      reply: "copilot_reply",
+      summary: "copilot_summary",
+      next: "copilot_next",
+    };
+    const action = actionByMode[mode] || "copilot_reply";
+    try {
+      await trackManualAssist(action, `mode:${mode}`);
+    } catch (error) {
+      const message = String(error?.message || "");
+      if (message.toLowerCase().includes("limite por minuto")) {
+        setStatus("Limite por minuto del Copiloto alcanzado. Espera unos segundos.", true);
+        return;
+      }
+      throw error;
+    }
+
     const output = buildCopilotOutput(mode);
     if (state.nodes.copilotOutput) {
       state.nodes.copilotOutput.value = output;
@@ -1753,11 +2114,21 @@
     setStatus("Copiloto listo. Revisa el texto antes de insertarlo.");
   };
 
-  const insertCopilotOutput = () => {
+  const insertCopilotOutput = async () => {
     const text = String(state.nodes.copilotOutput?.value || "").trim();
     if (!text) {
       setStatus("Genera una sugerencia antes de insertar.", true);
       return;
+    }
+    try {
+      await trackManualAssist("copilot_insert", "insert");
+    } catch (error) {
+      const message = String(error?.message || "");
+      if (message.toLowerCase().includes("limite por minuto")) {
+        setStatus("Limite por minuto del Copiloto alcanzado. Espera unos segundos.", true);
+        return;
+      }
+      throw error;
     }
     const inserted = insertMessageIntoComposer(text);
     if (!inserted) {
@@ -1767,6 +2138,7 @@
   };
 
   const handoffToHuman = async () => {
+    await trackManualAssist("copilot_handoff", "handoff");
     const lead = await ensureCurrentLead();
     await apiRequest(`/leads/${lead.id}/notes`, {
       method: "POST",
@@ -1882,6 +2254,7 @@
       consentStatus: state.nodes.consentSelect?.value || "pending",
       consentSource: "whatsapp_web_manual",
       stage,
+      ownerUserId: String(state.nodes.ownerSelect?.value || "").trim() || null,
       tags,
     };
 
@@ -2091,6 +2464,8 @@
               <h4>Chat actual</h4>
               <p class="wacrm-meta" id="wacrm-chat-meta">Abre una conversacion para gestionar.</p>
               <p class="wacrm-meta" id="wacrm-pipeline-meta">Pipeline: new:0 | contacted:0 | qualified:0 | won:0 | lost:0</p>
+              <p class="wacrm-meta" id="wacrm-compliance-meta">Compliant Mode ON | riesgo: low (0).</p>
+              <p class="wacrm-meta" id="wacrm-mode-meta">Modo: crm_manual | proveedor: dry_run.</p>
             </div>
             <div class="wacrm-block" data-section="tutorial">
               <h4>Tutorial rapido</h4>
@@ -2104,6 +2479,17 @@
               <h4>Leads calientes hoy</h4>
               <p class="wacrm-meta" id="wacrm-hot-meta">Sin leads calientes hoy.</p>
               <div class="wacrm-hot-list" id="wacrm-hot-leads"></div>
+            </div>
+            <div class="wacrm-block" data-section="overview,crm">
+              <h4>Bandeja multiagente</h4>
+              <div class="wacrm-chip-row" id="wacrm-inbox-filters"></div>
+              <p class="wacrm-meta" id="wacrm-inbox-counts">all:0 | my:0 | unassigned:0 | overdue:0</p>
+              <div class="wacrm-stage-list" id="wacrm-inbox-list"></div>
+            </div>
+            <div class="wacrm-block" data-section="overview,crm">
+              <h4>Productividad</h4>
+              <p class="wacrm-meta" id="wacrm-productivity-meta">Sin datos de productividad.</p>
+              <div class="wacrm-stage-list" id="wacrm-productivity-list"></div>
             </div>
             <div class="wacrm-block" data-section="crm">
               <h4>CRM Kanban</h4>
@@ -2140,6 +2526,11 @@
                   <select class="wacrm-select" id="wacrm-consent"></select>
                 </label>
               </div>
+              <label class="wacrm-label">Responsable
+                <select class="wacrm-select" id="wacrm-owner-user">
+                  <option value="">Sin asignar</option>
+                </select>
+              </label>
               <label class="wacrm-label">Tags (coma)<input class="wacrm-input" id="wacrm-tags" placeholder="nuevo, premium" /></label>
               <div class="wacrm-chip-row" id="wacrm-tag-suggestions"></div>
               <div class="wacrm-actions">
@@ -2269,10 +2660,17 @@
     state.nodes.toolsEl = root.querySelector("#wacrm-tools");
     state.nodes.chatEl = root.querySelector("#wacrm-chat-meta");
     state.nodes.pipelineMetaEl = root.querySelector("#wacrm-pipeline-meta");
+    state.nodes.complianceMetaEl = root.querySelector("#wacrm-compliance-meta");
+    state.nodes.messagingModeMetaEl = root.querySelector("#wacrm-mode-meta");
     state.nodes.tutorialSummaryEl = root.querySelector("#wacrm-tutorial-summary");
     state.nodes.tutorialListEl = root.querySelector("#wacrm-tutorial-list");
     state.nodes.hotLeadsMetaEl = root.querySelector("#wacrm-hot-meta");
     state.nodes.hotLeadsEl = root.querySelector("#wacrm-hot-leads");
+    state.nodes.inboxFiltersEl = root.querySelector("#wacrm-inbox-filters");
+    state.nodes.inboxCountsEl = root.querySelector("#wacrm-inbox-counts");
+    state.nodes.inboxListEl = root.querySelector("#wacrm-inbox-list");
+    state.nodes.productivityMetaEl = root.querySelector("#wacrm-productivity-meta");
+    state.nodes.productivityListEl = root.querySelector("#wacrm-productivity-list");
     state.nodes.crmBoardEl = root.querySelector("#wacrm-kanban-board");
     state.nodes.stageFiltersEl = root.querySelector("#wacrm-stage-filters");
     state.nodes.stageFilterMetaEl = root.querySelector("#wacrm-stage-filter-meta");
@@ -2286,6 +2684,7 @@
     state.nodes.phoneInput = root.querySelector("#wacrm-phone");
     state.nodes.stageSelect = root.querySelector("#wacrm-stage");
     state.nodes.consentSelect = root.querySelector("#wacrm-consent");
+    state.nodes.ownerSelect = root.querySelector("#wacrm-owner-user");
     state.nodes.tagsInput = root.querySelector("#wacrm-tags");
     state.nodes.tagSuggestionsEl = root.querySelector("#wacrm-tag-suggestions");
     state.nodes.stageShortcutsEl = root.querySelector("#wacrm-stage-shortcuts");
@@ -2338,6 +2737,11 @@
     renderCustomStageMeta();
     renderStageFilters();
     renderStageLeads();
+    renderComplianceMeta();
+    renderMessagingModeMeta();
+    renderOwnerSelect();
+    renderTeamInbox();
+    renderProductivityPanel();
     applyBlurMode();
 
     root.querySelector("#wacrm-toggle").addEventListener("click", () => {
@@ -2382,16 +2786,24 @@
       void withSyncGuard(createQuickFollowup);
     });
     root.querySelector("#wacrm-copilot-reply").addEventListener("click", () => {
-      runCopilot("reply");
+      void withSyncGuard(async () => {
+        await runCopilot("reply");
+      });
     });
     root.querySelector("#wacrm-copilot-summary").addEventListener("click", () => {
-      runCopilot("summary");
+      void withSyncGuard(async () => {
+        await runCopilot("summary");
+      });
     });
     root.querySelector("#wacrm-copilot-next").addEventListener("click", () => {
-      runCopilot("next");
+      void withSyncGuard(async () => {
+        await runCopilot("next");
+      });
     });
     root.querySelector("#wacrm-copilot-insert").addEventListener("click", () => {
-      insertCopilotOutput();
+      void withSyncGuard(async () => {
+        await insertCopilotOutput();
+      });
     });
     root.querySelector("#wacrm-copilot-human").addEventListener("click", () => {
       void withSyncGuard(handoffToHuman);
@@ -2417,6 +2829,23 @@
       syncLeadWithPhone();
       setStatus(`Plantilla activa: ${state.templateMode === "real_estate" ? "Inmobiliaria" : "General"}.`);
     });
+    state.nodes.inboxFiltersEl?.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const chip = target.closest("[data-inbox-view]");
+      if (!(chip instanceof HTMLElement)) {
+        return;
+      }
+
+      const view = String(chip.dataset.inboxView || "").trim();
+      if (!LEAD_INBOX_VIEWS.includes(view)) {
+        return;
+      }
+      state.leadInboxView = view;
+      void withSyncGuard(fetchWorkspaceData);
+    });
     state.nodes.customStageInput?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -2430,7 +2859,7 @@
 
   const syncConfigFromStorage = async () => {
     const values = await storageGet(STORAGE_KEYS);
-    state.apiBaseUrl = String(values.crm_api_base_url || "").trim() || DEFAULT_API_BASE_URL;
+    state.apiBaseUrl = normalizeApiBaseUrl(values[BACKEND_URL_STORAGE_KEY] || values.crm_api_base_url || "");
     state.token = String(values.crm_token || "").trim();
     state.tutorialProgress = normalizeTutorialProgress(values[TUTORIAL_PROGRESS_KEY]);
     state.panelPosition = normalizePanelPosition(values[PANEL_POSITION_KEY]);
@@ -2446,6 +2875,10 @@
     renderStageFilters();
     renderStageLeads();
     renderTagSuggestions();
+    renderMessagingModeMeta();
+    renderOwnerSelect();
+    renderTeamInbox();
+    renderProductivityPanel();
     applyBlurMode();
   };
 
@@ -2459,8 +2892,11 @@
           }
 
           let mustReload = false;
-          if (changes.crm_api_base_url) {
-            state.apiBaseUrl = String(changes.crm_api_base_url.newValue || "").trim() || DEFAULT_API_BASE_URL;
+          if (changes.crm_api_base_url || changes[BACKEND_URL_STORAGE_KEY]) {
+            const backendUrlRaw = changes[BACKEND_URL_STORAGE_KEY]
+              ? changes[BACKEND_URL_STORAGE_KEY].newValue
+              : changes.crm_api_base_url?.newValue;
+            state.apiBaseUrl = normalizeApiBaseUrl(backendUrlRaw || "");
             mustReload = true;
           }
           if (changes.crm_token) {

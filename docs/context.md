@@ -13,10 +13,13 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
   - `templates`
   - `campaigns`
   - `reminders`
+  - `compliance` (trust center + rate limit por usuario/minuto + estado de modo dual CRM/Cloud API)
+  - `analytics` (dashboard operativo de productividad, funnel y conversion por agente/etapa)
+  - `audit` (bitacora trazable de eventos de cumplimiento/operacion)
   - `whatsapp` (webhooks/envio)
 - `apps/extension`: extension Chrome MV3 (popup) para operacion comercial diaria.
   - Branding actual de extension: `WhatsWidget` (marca LeadWidget) con icono oficial de LeadWidget.
-  - Popup con endpoint API fijo a produccion (sin edicion manual de URL/keys) para reducir errores operativos.
+  - Popup con `BACKEND_URL` configurable (persistido en storage local con fallback seguro a produccion).
   - Acceso en popup por email/password (sin configuracion manual de Google/OAuth en UI final).
   - Incluye `content_script` en `web.whatsapp.com` para panel CRM embebido (sin auto-envio), con plantilla operativa seleccionable (`General` o `Inmobiliaria`):
     - modo `General`: playbook comercial, etiquetas sugeridas y atajos de etapa para ventas/servicios no inmobiliarios
@@ -34,6 +37,10 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - panel arrastrable por la barra superior; doble clic para resetear posicion automatica
     - modo privacidad `Blur demo` para ocultar chats/mensajes durante demos
     - bloque `Copiloto asistido` (sugerir respuesta, resumir lead, siguiente accion y derivacion humana) sin auto-envio
+    - `Compliance Trust Center` visible en panel (estado compliant, riesgo y alertas principales)
+    - `Messaging Mode` visible en panel (`crm_manual` vs `cloud_api`, con indicador de proveedor/fallback `dry_run`)
+    - bandeja multiagente en panel (`my`, `unassigned`, `overdue`, `all`) con acciones de asignacion y health events
+    - resumen operativo de productividad en panel (funnel por etapa + top agentes con carga y vencidos)
   - Incluye `background service worker` para revisar recordatorios vencidos y emitir notificaciones de escritorio (sin auto-envio).
   - Popup CRM agrega capacidades avanzadas sin romper contrato API:
     - Kanban real con drag & drop por etapas (actualiza stage via `PATCH /api/v1/leads/:leadId/stage`)
@@ -41,6 +48,12 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - apertura de chat a numero no guardado (`web.whatsapp.com/send?phone=...`) con envio manual
     - acceso directo a Google Calendar desde recordatorios (link prellenado)
     - validaciones operativas en popup: campanas solo con destinatarios `opted_in` y recordatorios con fecha/hora valida
+    - preflight de campana previo al envio (score de riesgo + bloqueos explicados)
+    - trust center con cobertura opt-in, cuota diaria, riesgo anti-spam y auditoria reciente
+    - estado visible de `Messaging Mode` (`crm_manual` vs `cloud_api`) con fallback explicito a `dry_run`
+    - bandejas multiagente (`my`, `unassigned`, `overdue`, `all`) consumiendo `GET /api/v1/leads/inbox`
+    - asignacion de owner por lead (`PATCH /api/v1/leads/:leadId/assign`) y eventos de health score (`POST /api/v1/leads/:leadId/health-events`)
+    - dashboard de productividad (`GET /api/v1/analytics/productivity`) con KPIs operativos, funnel y resumen por agente
     - importacion CSV de contactos al CRM via `POST /api/v1/leads/upsert`
     - selector de idioma en popup (`ES/EN/PT`)
 - Persistencia actual: Firestore (colecciones por modulo).
@@ -60,10 +73,13 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Leads:
   - (protegidos por auth + suscripcion activa)
   - `POST /api/v1/leads`
-  - `GET /api/v1/leads`
+  - `GET /api/v1/leads` (query `view` opcional)
+  - `GET /api/v1/leads/inbox`
   - `POST /api/v1/leads/upsert`
   - `PATCH /api/v1/leads/:leadId`
   - `PATCH /api/v1/leads/:leadId/stage`
+  - `PATCH /api/v1/leads/:leadId/assign`
+  - `POST /api/v1/leads/:leadId/health-events`
   - `POST /api/v1/leads/:leadId/notes`
 - Auth:
   - `POST /api/v1/auth/register`
@@ -84,11 +100,20 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
   - `GET /api/v1/templates`
 - Campanas:
   - `POST /api/v1/campaigns`
+  - `POST /api/v1/campaigns/preflight`
   - `GET /api/v1/campaigns`
+  - `POST /api/v1/campaigns/:campaignId/preflight`
   - `POST /api/v1/campaigns/:campaignId/send`
 - Recordatorios:
   - `POST /api/v1/reminders`
   - `GET /api/v1/reminders`
+  - `PATCH /api/v1/reminders/:reminderId/complete`
+- Compliance:
+  - `GET /api/v1/compliance/trust-center`
+  - `GET /api/v1/compliance/messaging-mode`
+  - `POST /api/v1/compliance/manual-assist`
+- Analytics:
+  - `GET /api/v1/analytics/productivity`
 - Webhooks:
   - `GET /api/v1/webhooks/whatsapp`
   - `POST /api/v1/webhooks/whatsapp`
@@ -99,12 +124,15 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - `PORT`
 - `APP_ORIGIN` (uno o varios origins separados por coma para front web)
 - `ADMIN_SYNC_KEY` (token server-to-server para sincronizacion segura desde superadmin externo)
+- `CRM_MESSAGING_MODE` (`crm_manual` | `cloud_api`, default `crm_manual`)
 - `WHATSAPP_ACCESS_TOKEN`
 - `WHATSAPP_PHONE_NUMBER_ID`
 - `WHATSAPP_VERIFY_TOKEN`
 - `WHATSAPP_GRAPH_API_VERSION`
 - `MAX_CAMPAIGN_MESSAGES_PER_MINUTE`
 - `MAX_CAMPAIGN_MESSAGES_PER_DAY`
+- `MAX_CAMPAIGN_NON_OPTIN_PERCENT`
+- `MAX_MANUAL_ASSIST_ACTIONS_PER_MINUTE`
 - `PLAN_MONTHLY_PRICE_PEN`
 - `BILLING_PERIOD_DAYS`
 - `SESSION_TTL_DAYS`
@@ -125,14 +153,20 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Envio masivo restringido a leads `opted_in`.
 - Throttling basico por minuto para campanas.
 - Limite diario por workspace para campanas (`MAX_CAMPAIGN_MESSAGES_PER_DAY`).
+- Preflight bloquea campanas si el porcentaje sin opt-in supera `MAX_CAMPAIGN_NON_OPTIN_PERCENT` (default 20%).
+- Modo de mensajeria dual: `cloud_api` solo se resuelve si hay credenciales completas; caso contrario fuerza `dry_run` en `crm_manual`.
+- Acciones de Copiloto asistido limitadas por usuario/minuto (`MAX_MANUAL_ASSIST_ACTIONS_PER_MINUTE`).
 - El panel en WhatsApp Web solo inserta texto en composer; el envio final queda manual por el usuario.
 - Recordatorios vencidos disparan notificacion local en Chrome (polling por `chrome.alarms`), con deduplicacion local para evitar alertas repetidas.
+- Recordatorios permiten cierre manual trazable (`PATCH /api/v1/reminders/:reminderId/complete`).
 - Seguimientos asistidos desde panel embebido mantienen limite diario local (`20`) y no ejecutan envio automatico.
+- Eventos criticos de CRM/compliance se registran en `audit_logs` para trazabilidad operativa.
 - CORS restringido por `APP_ORIGIN`.
 - El endpoint `POST /api/v1/admin/sync-subscription` no usa sesion de usuario; exige secreto `x-admin-sync-key` para uso server-to-server.
 - Requests desde `chrome-extension://*` estan permitidos para uso de extension local (load unpacked).
 - Requests desde `https://web.whatsapp.com` estan permitidos para el panel embebido (content script).
 - Firestore rules por defecto en modo backend-only (`allow false` para SDK cliente directo).
+- Extension comparte `BACKEND_URL` por storage key `crm_backend_url` (sin hardcode obligatorio en runtime).
 
 ## Dependencias Criticas
 

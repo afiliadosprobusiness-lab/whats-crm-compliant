@@ -96,6 +96,49 @@ body {
   gap: 8px;
 }
 
+.trust-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.trust-grid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trust-grid article {
+  border-radius: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+}
+
+.trust-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.trust-grid strong {
+  font-size: 0.9rem;
+}
+
+.compliance-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #e9f9ef;
+  border: 1px solid #bde4c8;
+  color: #056b35;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 4px 10px;
+}
+
 .kpis article {
   border-radius: 8px;
   padding: 8px;
@@ -110,6 +153,17 @@ body {
 
 .kpis strong {
   font-size: 1.1rem;
+}
+
+.kpis.kpis-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mode-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .grid {
@@ -198,6 +252,14 @@ button:hover {
   font-size: 0.73rem;
 }
 
+.hint.error {
+  color: var(--danger);
+}
+
+#backend-url-preview {
+  overflow-wrap: anywhere;
+}
+
 .session-row {
   margin-top: 8px;
   display: flex;
@@ -269,6 +331,10 @@ button:hover {
   overflow: auto;
 }
 
+.list.list-compact {
+  max-height: 110px;
+}
+
 .list li {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -292,6 +358,13 @@ button:hover {
   flex-wrap: wrap;
 }
 
+.btn-row .inline-select {
+  flex: 1;
+  min-width: 110px;
+  padding: 5px 8px;
+  font-size: 0.72rem;
+}
+
 .btn-xs {
   padding: 5px 8px;
   border-radius: 8px;
@@ -306,6 +379,13 @@ button:hover {
 
 .btn-ghost:hover {
   background: #e2eee7;
+}
+
+.preflight-box {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  background: #fbfdfb;
 }
 
 .pipeline {
@@ -397,6 +477,16 @@ button:hover {
 .chip.active {
   border-color: #8ac79d;
   background: #dff2e3;
+}
+
+.chip[data-inbox-view] {
+  border: 1px solid #cde0cf;
+}
+
+.inbox-meta {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .is-hidden {

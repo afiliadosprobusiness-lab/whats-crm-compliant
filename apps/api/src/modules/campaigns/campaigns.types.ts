@@ -40,6 +40,32 @@ export type OutboundMessageLog = {
   sentAt: string;
 };
 
+export type CampaignPreflight = {
+  campaignId: string;
+  totalRecipients: number;
+  optedInRecipients: number;
+  missingRecipients: number;
+  nonOptedInRecipients: number;
+  nonOptedInPercentage: number;
+  nonOptedInThresholdPercentage: number;
+  dailyQuota: {
+    maxPerDay: number;
+    sentToday: number;
+    remaining: number;
+    attemptedOptedInRecipients: number;
+    withinQuota: boolean;
+  };
+  risk: {
+    score: number;
+    level: "low" | "medium" | "high";
+    reasons: string[];
+  };
+  blockers: string[];
+  recommendations: string[];
+  canSend: boolean;
+  evaluatedAt: string;
+};
+
 export const createCampaignSchema = z.object({
   name: z.string().trim().min(2).max(120),
   templateId: z.string().trim().min(1),
