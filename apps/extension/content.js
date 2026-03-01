@@ -40,6 +40,7 @@
   const CRM_BUILD_TAG = "0.4.8-2026-02-28";
   const WA_TOP_BAR_ID = "wacrm-wa-topbar";
   const WA_COMPOSER_BAR_ID = "wacrm-wa-composerbar";
+  const WORKSPACE_REFRESH_SIGNAL_KEY = "crm_workspace_refresh_tick";
   const VIEW_REFRESH_TICK_MS = 2500;
   const WORKSPACE_AUTOSYNC_ACTIVE_MS = 12000;
   const WORKSPACE_AUTOSYNC_IDLE_MS = 30000;
@@ -1868,11 +1869,7 @@
       state.nodes.waComposerBar = bar;
     }
 
-    if (host.matches("footer")) {
-      if (host.firstElementChild !== bar) {
-        host.prepend(bar);
-      }
-    } else if (host.parentElement instanceof HTMLElement) {
+    if (host.parentElement instanceof HTMLElement) {
       if (host.previousElementSibling !== bar || bar.parentElement !== host.parentElement) {
         host.parentElement.insertBefore(bar, host);
       }
@@ -3328,6 +3325,9 @@
           if (changes[BLUR_MODE_KEY]) {
             state.blurMode = Boolean(changes[BLUR_MODE_KEY].newValue);
             applyBlurMode();
+          }
+          if (changes[WORKSPACE_REFRESH_SIGNAL_KEY]) {
+            maybeAutoSyncWorkspaceData(true);
           }
 
           if (mustReload) {

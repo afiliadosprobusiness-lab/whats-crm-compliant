@@ -38,6 +38,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - barra superior nativa en WhatsApp Web (debajo del header del chat) con estado vivo de lead/compliance/modo y atajos rapidos (`Guardar`, `Resumen`, `CRM`)
     - barra de acciones sobre la caja de mensaje con accesos rapidos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`)
     - sincronizacion dinamica de datos del workspace (templates/leads/reminders/compliance) sin recargar pagina, con auto-refresh por intervalo y al volver foco/visibilidad
+    - sincronizacion instantanea popup -> panel embebido via `chrome.storage` (`crm_workspace_refresh_tick`) para reflejar cambios en caliente tras guardar entidades
     - modo privacidad `Blur demo` para ocultar chats/mensajes durante demos
     - bloque `Copiloto asistido` (sugerir respuesta, resumir lead, siguiente accion y derivacion humana) sin auto-envio
     - `Compliance Trust Center` visible en panel (estado compliant, riesgo y alertas principales)
@@ -166,6 +167,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Eventos criticos de CRM/compliance se registran en `audit_logs` para trazabilidad operativa.
 - CORS restringido por `APP_ORIGIN`.
 - El endpoint `POST /api/v1/admin/sync-subscription` no usa sesion de usuario; exige secreto `x-admin-sync-key` para uso server-to-server.
+- Endpoints de webhook (`/api/v1/webhooks/*`) quedan fuera de auth/subscription middleware para permitir verificacion/recepcion desde Meta.
 - Requests desde `chrome-extension://*` estan permitidos para uso de extension local (load unpacked).
 - Requests desde `https://web.whatsapp.com` estan permitidos para el panel embebido (content script).
 - Firestore rules por defecto en modo backend-only (`allow false` para SDK cliente directo).

@@ -302,6 +302,7 @@ export const createApp = () => {
     }),
   );
   app.use("/api/v1/admin", adminRouter);
+  app.use("/api/v1/webhooks", createWebhooksRouter(webhooksController));
 
   const crmRouter = Router();
   crmRouter.use(authMiddleware);
@@ -313,8 +314,6 @@ export const createApp = () => {
   crmRouter.use("/compliance", createComplianceRouter(complianceController));
   crmRouter.use("/analytics", createAnalyticsRouter(analyticsController));
   app.use("/api/v1", crmRouter);
-
-  app.use("/api/v1/webhooks", createWebhooksRouter(webhooksController));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

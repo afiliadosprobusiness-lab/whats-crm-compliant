@@ -11,6 +11,8 @@ const LANG_STORAGE_KEY = "crm_lang_v1";
 const SEGMENTS_STORAGE_KEY = "crm_segments_v1";
 const ACTIVE_SEGMENT_STORAGE_KEY = "crm_active_segment_v1";
 const BACKEND_URL_STORAGE_KEY = "crm_backend_url";
+const WORKSPACE_REFRESH_SIGNAL_KEY = "crm_workspace_refresh_tick";
+const WORKSPACE_REFRESH_SIGNAL_MIN_MS = 1500;
 const I18N = {
   es: {},
   en: {
@@ -234,6 +236,7 @@ const state = {
     analyticsProductivity: true,
     authUsers: true,
   },
+  lastWorkspaceSignalAt: 0,
 };
 
 const crmSections = Array.from(document.querySelectorAll("[data-crm]"));
@@ -513,6 +516,21 @@ const renderBackendConfig = () => {
   if (backendUrlPreviewEl) {
     backendUrlPreviewEl.textContent = `API: ${state.apiBaseUrl}`;
   }
+};
+
+const announceWorkspaceRefresh = async (force = false) => {
+  if (!hasChromeStorage) {
+    return;
+  }
+
+  const now = Date.now();
+  const elapsed = now - Number(state.lastWorkspaceSignalAt || 0);
+  if (!force && elapsed < WORKSPACE_REFRESH_SIGNAL_MIN_MS) {
+    return;
+  }
+
+  state.lastWorkspaceSignalAt = now;
+  await storageSet({ [WORKSPACE_REFRESH_SIGNAL_KEY]: now });
 };
 
 const renderSimpleList = (listEl, items) => {
@@ -1276,6 +1294,7 @@ const refreshData = async () => {
   renderProductivity();
   renderSegmentTabs();
   renderSegmentLeads();
+  await announceWorkspaceRefresh(false);
 };
 
 const bootstrapAuthenticated = async () => {
