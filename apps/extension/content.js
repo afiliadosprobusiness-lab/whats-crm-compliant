@@ -379,6 +379,11 @@
     return `+${cleaned}`;
   };
 
+  const isLikelyPhone = (input) => {
+    const digits = String(input || "").replace(/\D/g, "");
+    return digits.length >= 8 && digits.length <= 15;
+  };
+
   const normalizeNameForMatch = (input) => {
     return String(input || "")
       .toLowerCase()
@@ -390,8 +395,94 @@
   };
 
   const extractPhoneFromText = (text) => {
-    const match = String(text || "").match(/\+?\d[\d\s-]{7,}/);
-    return normalizePhone(match?.[0] || "");
+    const source = String(text || "");
+    if (!source) {
+      return "";
+    }
+    const matches = source.match(/(?:\+|00)?\d[\d\s().-]{6,}\d/g) || [];
+    for (const raw of matches) {
+      const normalized = normalizePhone(raw);
+      if (isLikelyPhone(normalized)) {
+        return normalized;
+      }
+    }
+    return "";
+  };
+
+  const extractPhoneFromDataId = (value) => {
+    const raw = String(value || "");
+    if (!raw) {
+      return "";
+    }
+    const match = raw.match(/(\+?\d{8,15})@/);
+    const normalized = normalizePhone(match?.[1] || "");
+    return isLikelyPhone(normalized) ? normalized : "";
+  };
+
+  const extractPhoneFromLocation = () => {
+    const candidates = [];
+    try {
+      const url = new URL(window.location.href);
+      candidates.push(normalizePhone(url.searchParams.get("phone") || ""));
+      if (url.hash) {
+        const hashQuery = url.hash.includes("?") ? url.hash.slice(url.hash.indexOf("?") + 1) : "";
+        if (hashQuery) {
+          const hashParams = new URLSearchParams(hashQuery);
+          candidates.push(normalizePhone(hashParams.get("phone") || ""));
+        }
+      }
+      candidates.push(extractPhoneFromText(url.href));
+    } catch (_error) {
+      candidates.push(extractPhoneFromText(window.location.href));
+    }
+
+    for (const candidate of candidates) {
+      if (isLikelyPhone(candidate)) {
+        return candidate;
+      }
+    }
+    return "";
+  };
+
+  const extractPhoneFromChatDom = (headerEl) => {
+    const candidates = [];
+    const header = headerEl instanceof HTMLElement ? headerEl : document.querySelector("#main header");
+    if (header instanceof HTMLElement) {
+      header.querySelectorAll("[data-id]").forEach((node) => {
+        candidates.push(extractPhoneFromDataId(node.getAttribute("data-id")));
+      });
+
+      const textSelectors = [
+        "[data-testid='conversation-info-header-chat-title']",
+        "[data-testid='conversation-info-header-chat-subtitle']",
+        "span[title]",
+        "div[dir='auto']",
+      ];
+      textSelectors.forEach((selector) => {
+        header.querySelectorAll(selector).forEach((node) => {
+          const title = node.getAttribute?.("title") || "";
+          const text = node.textContent || "";
+          candidates.push(extractPhoneFromText(title));
+          candidates.push(extractPhoneFromText(text));
+        });
+      });
+    }
+
+    const selectedRow = document.querySelector("#pane-side [aria-selected='true']");
+    if (selectedRow instanceof HTMLElement) {
+      selectedRow.querySelectorAll("[data-id], [title], span, div").forEach((node) => {
+        candidates.push(extractPhoneFromDataId(node.getAttribute?.("data-id") || ""));
+        candidates.push(extractPhoneFromText(node.getAttribute?.("title") || ""));
+        candidates.push(extractPhoneFromText(node.textContent || ""));
+      });
+    }
+
+    for (const candidate of candidates) {
+      if (isLikelyPhone(candidate)) {
+        return candidate;
+      }
+    }
+    return "";
   };
 
   const storageSet = async (payload) => {
@@ -1037,11 +1128,33 @@
       return null;
     }
 
+    const phoneGuess =
+      extractPhoneFromLocation() ||
+      extractPhoneFromDataId(titleEl?.getAttribute?.("data-id") || "") ||
+      extractPhoneFromChatDom(header) ||
+      extractPhoneFromText(title);
+
     return {
       name: title,
-      phoneGuess: extractPhoneFromText(title),
-      key: `${title}::${extractPhoneFromText(title)}`,
+      phoneGuess,
+      key: `${title}::${phoneGuess}`,
     };
+  };
+
+  const guessPhoneForCurrentChat = () => {
+    const fromCurrentChat = normalizePhone(state.currentChat?.phoneGuess || "");
+    if (isLikelyPhone(fromCurrentChat)) {
+      return fromCurrentChat;
+    }
+    const fromLocation = extractPhoneFromLocation();
+    if (isLikelyPhone(fromLocation)) {
+      return fromLocation;
+    }
+    const fromDom = extractPhoneFromChatDom(getConversationHeaderEl());
+    if (isLikelyPhone(fromDom)) {
+      return fromDom;
+    }
+    return "";
   };
 
   const getProfileFromForm = () => {
@@ -2206,7 +2319,7 @@
         } else if (state.syncing) {
           hintEl.textContent = "Sincronizando datos CRM...";
         } else if (!state.currentLead) {
-          hintEl.textContent = "Tip: si el contacto ya existe se enlaza automatico por chat; si es nuevo, guarda lead (Nombre + Telefono).";
+          hintEl.textContent = "Tip: si el contacto ya existe se enlaza automatico; si es nuevo, intenta autocompletar telefono al guardar.";
         } else {
           hintEl.textContent = "Inserta texto y confirma envio manual en WhatsApp.";
         }
@@ -2975,10 +3088,36 @@
   };
 
   const saveLead = async () => {
-    const phone = normalizePhone(state.nodes.phoneInput?.value || "");
-    const name = String(state.nodes.nameInput?.value || "").trim();
-    if (!phone || !name) {
-      setStatus("Completa nombre y telefono para guardar el lead.", true);
+    let phone = normalizePhone(state.nodes.phoneInput?.value || "");
+    let name = String(state.nodes.nameInput?.value || "").trim();
+
+    if (!name && state.currentChat?.name) {
+      name = String(state.currentChat.name || "").trim();
+      if (state.nodes.nameInput) {
+        state.nodes.nameInput.value = name;
+      }
+    }
+
+    if (!phone) {
+      const autoPhone = guessPhoneForCurrentChat();
+      if (autoPhone) {
+        phone = autoPhone;
+        if (state.nodes.phoneInput) {
+          state.nodes.phoneInput.value = autoPhone;
+        }
+      }
+    }
+
+    if (!name) {
+      setStatus("Completa el nombre del contacto para guardar el lead.", true);
+      return;
+    }
+
+    if (!phone) {
+      setStatus(
+        "No pude detectar telefono automaticamente. Pega el numero E.164 (+519...) y vuelve a guardar.",
+        true,
+      );
       return;
     }
 
