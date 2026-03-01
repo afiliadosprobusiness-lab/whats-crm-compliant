@@ -77,6 +77,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido arrastrable; doble clic en la barra superior reinicia posicion automatica.
   - Panel embebido agrega barra de estado/atajos junto al input (debajo del composer) con estado vivo de lead/compliance/modo y acciones (`Guardar`, `Resumen`, `CRM`) con paleta visual activa.
   - Panel embebido agrega barra de acciones sobre la caja de mensaje con atajos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos con colores de estado, manteniendo envio manual.
+  - Panel embebido asocia automaticamente chat -> lead priorizando telefono y memoria de contexto por workspace (fallback por nombre unico) para reducir pasos manuales al cambiar de chat.
   - Panel embebido sincroniza datos en caliente sin recargar (templates/leads/reminders/compliance), con auto-refresh por intervalo y refresco inmediato al recuperar foco.
   - Popup y panel embebido propagan refresco inmediato via storage key `crm_workspace_refresh_tick` para reflejar altas/cambios sin recargar.
   - `background service worker` de extension para polling de recordatorios vencidos (`chrome.alarms`) y alertas nativas (`chrome.notifications`).

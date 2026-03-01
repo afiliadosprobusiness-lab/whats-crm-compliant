@@ -18,6 +18,7 @@
     "crm_custom_stages_v1",
     "crm_blur_mode_v1",
     "crm_template_mode_v1",
+    "crm_chat_lead_bindings_v1",
   ];
   const FOLLOWUP_USAGE_KEY = "crm_followup_usage_v1";
   const FOLLOWUP_DAILY_LIMIT = 20;
@@ -64,6 +65,7 @@
   const CUSTOM_STAGES_KEY = "crm_custom_stages_v1";
   const BLUR_MODE_KEY = "crm_blur_mode_v1";
   const TEMPLATE_MODE_KEY = "crm_template_mode_v1";
+  const CHAT_LEAD_BINDINGS_KEY = "crm_chat_lead_bindings_v1";
   const PIPELINE_STAGE_TAG_PREFIX = "step_";
   const PIPELINE_STAGE_KEY_MAX_LEN = 25;
   const TEMPLATE_MODES = ["general", "real_estate"];
@@ -234,6 +236,8 @@
     blurMode: false,
     templateMode: DEFAULT_TEMPLATE_MODE,
     templateModeStore: {},
+    chatLeadBindingsStore: {},
+    chatLeadBindings: {},
     nodes: {},
   };
 
@@ -373,6 +377,16 @@
       return `+${cleaned.slice(2)}`;
     }
     return `+${cleaned}`;
+  };
+
+  const normalizeNameForMatch = (input) => {
+    return String(input || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
   };
 
   const extractPhoneFromText = (text) => {
@@ -663,8 +677,90 @@
     return normalized;
   };
 
+  const getChatBindingKeys = (chat = state.currentChat) => {
+    if (!chat || typeof chat !== "object") {
+      return [];
+    }
+    const nameKey = normalizeNameForMatch(chat.name);
+    const phoneKey = normalizePhone(chat.phoneGuess || "");
+    const keys = [];
+    if (phoneKey) {
+      keys.push(`p:${phoneKey}`);
+    }
+    if (nameKey) {
+      keys.push(`n:${nameKey}`);
+    }
+    if (nameKey && phoneKey) {
+      keys.push(`np:${nameKey}::${phoneKey}`);
+    }
+    return Array.from(new Set(keys));
+  };
+
+  const normalizeChatLeadBindings = (value) => {
+    if (!value || typeof value !== "object") {
+      return {};
+    }
+
+    const pairs = Object.entries(value)
+      .map(([chatKey, binding]) => {
+        const key = String(chatKey || "").trim().slice(0, 220);
+        if (!key || !binding || typeof binding !== "object") {
+          return null;
+        }
+        const leadId = String(binding.leadId || "").trim().slice(0, 120);
+        if (!leadId) {
+          return null;
+        }
+        const leadName = String(binding.leadName || "").trim().slice(0, 120);
+        const phoneE164 = normalizePhone(binding.phoneE164 || "");
+        const updatedAtRaw = String(binding.updatedAt || "").trim();
+        const updatedAtTime = new Date(updatedAtRaw).getTime();
+        const updatedAt = Number.isNaN(updatedAtTime) ? new Date().toISOString() : new Date(updatedAtTime).toISOString();
+        return [
+          key,
+          {
+            leadId,
+            leadName,
+            phoneE164,
+            updatedAt,
+          },
+        ];
+      })
+      .filter(Boolean)
+      .sort((a, b) => new Date(b[1].updatedAt).getTime() - new Date(a[1].updatedAt).getTime())
+      .slice(0, 400);
+
+    return Object.fromEntries(pairs);
+  };
+
+  const normalizeChatLeadBindingsStore = (value) => {
+    if (!value || typeof value !== "object") {
+      return {};
+    }
+
+    const normalized = {};
+    Object.entries(value).forEach(([workspaceKey, bindings]) => {
+      if (!workspaceKey) {
+        return;
+      }
+      normalized[workspaceKey] = normalizeChatLeadBindings(bindings);
+    });
+    return normalized;
+  };
+
   const getWorkspaceStorageKey = () => {
     return state.workspaceId || "__default__";
+  };
+
+  const applyWorkspaceChatLeadBindings = () => {
+    const workspaceKey = getWorkspaceStorageKey();
+    state.chatLeadBindings = normalizeChatLeadBindings(state.chatLeadBindingsStore[workspaceKey]);
+  };
+
+  const persistChatLeadBindings = async () => {
+    const workspaceKey = getWorkspaceStorageKey();
+    state.chatLeadBindingsStore[workspaceKey] = normalizeChatLeadBindings(state.chatLeadBindings);
+    await storageSet({ [CHAT_LEAD_BINDINGS_KEY]: state.chatLeadBindingsStore });
   };
 
   const getPipelineStages = () => {
@@ -1274,6 +1370,88 @@
     renderTutorial();
   };
 
+  const bindCurrentChatToLead = async (lead) => {
+    if (!lead || !lead.id || !state.currentChat) {
+      return;
+    }
+    const bindingKeys = getChatBindingKeys(state.currentChat);
+    if (bindingKeys.length === 0) {
+      return;
+    }
+
+    const leadId = String(lead.id || "").trim();
+    const leadName = String(lead.name || "").trim().slice(0, 120);
+    const phoneE164 = normalizePhone(lead.phoneE164 || "");
+    const updatedAt = new Date().toISOString();
+    let changed = false;
+
+    bindingKeys.forEach((bindingKey) => {
+      const current = state.chatLeadBindings[bindingKey];
+      if (
+        current &&
+        String(current.leadId || "") === leadId &&
+        normalizePhone(current.phoneE164 || "") === phoneE164 &&
+        String(current.leadName || "") === leadName
+      ) {
+        return;
+      }
+      changed = true;
+      state.chatLeadBindings[bindingKey] = {
+        leadId,
+        leadName,
+        phoneE164,
+        updatedAt,
+      };
+    });
+
+    if (!changed) {
+      return;
+    }
+
+    state.chatLeadBindings = normalizeChatLeadBindings(state.chatLeadBindings);
+    await persistChatLeadBindings();
+  };
+
+  const findLeadByChatContext = (chat = state.currentChat) => {
+    const leads = Array.isArray(state.leads) ? state.leads : [];
+    if (!chat || leads.length === 0) {
+      return null;
+    }
+
+    const bindingKeys = getChatBindingKeys(chat);
+    for (const bindingKey of bindingKeys) {
+      const binding = state.chatLeadBindings[bindingKey];
+      if (!binding) {
+        continue;
+      }
+
+      const byId = leads.find((lead) => String(lead?.id || "") === String(binding.leadId || ""));
+      if (byId) {
+        return byId;
+      }
+
+      const bindingPhone = normalizePhone(binding.phoneE164 || "");
+      if (bindingPhone) {
+        const byPhone = leads.find((lead) => normalizePhone(lead?.phoneE164 || "") === bindingPhone);
+        if (byPhone) {
+          return byPhone;
+        }
+      }
+    }
+
+    const chatName = normalizeNameForMatch(chat.name);
+    if (!chatName) {
+      return null;
+    }
+
+    const byUniqueName = leads.filter((lead) => normalizeNameForMatch(lead?.name || "") === chatName);
+    if (byUniqueName.length === 1) {
+      return byUniqueName[0];
+    }
+
+    return null;
+  };
+
   const fillLeadIntoForm = (lead) => {
     if (!lead) {
       return;
@@ -1291,6 +1469,7 @@
     } else {
       fillProfileForm(null);
     }
+    void bindCurrentChatToLead(lead);
     updateLeadMeta();
     setStatus(`Lead cargado: ${lead.name}.`);
   };
@@ -2027,7 +2206,7 @@
         } else if (state.syncing) {
           hintEl.textContent = "Sincronizando datos CRM...";
         } else if (!state.currentLead) {
-          hintEl.textContent = "Tip: para Seguimiento y Recordatorio +24h primero guarda el lead (Nombre + Telefono).";
+          hintEl.textContent = "Tip: si el contacto ya existe se enlaza automatico por chat; si es nuevo, guarda lead (Nombre + Telefono).";
         } else {
           hintEl.textContent = "Inserta texto y confirma envio manual en WhatsApp.";
         }
@@ -2257,15 +2436,16 @@
 
   const syncLeadWithPhone = () => {
     const phone = normalizePhone(state.nodes.phoneInput?.value || "");
-    if (!phone) {
-      state.currentLead = null;
-      updateLeadMeta();
-      return;
-    }
-
-    state.currentLead =
-      state.leads.find((lead) => normalizePhone(lead.phoneE164) === phone) || null;
+    const byPhone = phone
+      ? state.leads.find((lead) => normalizePhone(lead.phoneE164) === phone) || null
+      : null;
+    const byChatContext = byPhone ? null : findLeadByChatContext(state.currentChat);
+    state.currentLead = byPhone || byChatContext || null;
     if (state.currentLead && state.nodes.stageSelect) {
+      const normalizedLeadPhone = normalizePhone(state.currentLead.phoneE164 || "");
+      if (state.nodes.phoneInput && normalizedLeadPhone && normalizedLeadPhone !== phone) {
+        state.nodes.phoneInput.value = normalizedLeadPhone;
+      }
       state.nodes.stageSelect.value = state.currentLead.stage;
       if (state.nodes.consentSelect) {
         state.nodes.consentSelect.value = state.currentLead.consentStatus;
@@ -2281,6 +2461,7 @@
       } else {
         fillProfileForm(null);
       }
+      void bindCurrentChatToLead(state.currentLead);
     } else {
       fillProfileForm(null);
     }
@@ -2432,6 +2613,7 @@
       state.workspaceId = "";
       applyWorkspaceCustomStages();
       applyWorkspaceTemplateMode();
+      applyWorkspaceChatLeadBindings();
       state.subscription = null;
       state.canUseCrm = false;
       state.trustCenter = null;
@@ -2472,6 +2654,7 @@
     state.workspaceId = String(meData?.workspace?.id || meData?.user?.workspaceId || "").trim();
     applyWorkspaceCustomStages();
     applyWorkspaceTemplateMode();
+    applyWorkspaceChatLeadBindings();
     state.subscription = billingData.subscription || null;
     state.canUseCrm = Boolean(state.subscription?.canUseCrm);
 
@@ -2817,6 +3000,9 @@
 
     const result = await apiRequest("/leads/upsert", { method: "POST", body: JSON.stringify(payload) });
     const leadId = result?.lead?.id;
+    if (result?.lead) {
+      void bindCurrentChatToLead(result.lead);
+    }
     if (leadId && profile && hasProfileData(profile)) {
       await apiRequest(`/leads/${leadId}/notes`, {
         method: "POST",
@@ -3462,9 +3648,11 @@
     state.panelPosition = normalizePanelPosition(values[PANEL_POSITION_KEY]);
     state.customStageStore = normalizeCustomStageStore(values[CUSTOM_STAGES_KEY]);
     state.templateModeStore = normalizeTemplateModeStore(values[TEMPLATE_MODE_KEY]);
+    state.chatLeadBindingsStore = normalizeChatLeadBindingsStore(values[CHAT_LEAD_BINDINGS_KEY]);
     state.blurMode = Boolean(values[BLUR_MODE_KEY]);
     applyWorkspaceCustomStages();
     applyWorkspaceTemplateMode();
+    applyWorkspaceChatLeadBindings();
     renderTutorial();
     renderCustomStageMeta();
     applyTemplateModeUI();
@@ -3522,6 +3710,10 @@
             renderStageShortcuts();
             renderStageFilters();
             renderStageLeads();
+          }
+          if (changes[CHAT_LEAD_BINDINGS_KEY]) {
+            state.chatLeadBindingsStore = normalizeChatLeadBindingsStore(changes[CHAT_LEAD_BINDINGS_KEY].newValue);
+            applyWorkspaceChatLeadBindings();
           }
           if (changes[BLUR_MODE_KEY]) {
             state.blurMode = Boolean(changes[BLUR_MODE_KEY].newValue);
