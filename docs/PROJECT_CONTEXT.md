@@ -75,6 +75,8 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
   - Dock lateral con atajos operativos: guardar lead rapido, insertar plantilla y crear seguimiento rapido.
   - Panel embebido arrastrable; doble clic en la barra superior reinicia posicion automatica.
+  - Panel embebido agrega barra superior nativa (debajo del header del chat) con estado vivo de lead/compliance/modo y atajos (`Guardar`, `Resumen`, `CRM`).
+  - Panel embebido agrega barra de acciones sobre la caja de mensaje con atajos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) manteniendo envio manual.
   - `background service worker` de extension para polling de recordatorios vencidos (`chrome.alarms`) y alertas nativas (`chrome.notifications`).
   - Estado de sesion.
   - Estado de suscripcion (badge Activo/Inactivo); activacion/renovacion se gestiona desde superadmin.

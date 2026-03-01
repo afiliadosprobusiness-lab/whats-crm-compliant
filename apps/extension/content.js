@@ -38,6 +38,8 @@
     { event: "spam_reported", label: "Spam" },
   ];
   const CRM_BUILD_TAG = "0.4.8-2026-02-28";
+  const WA_TOP_BAR_ID = "wacrm-wa-topbar";
+  const WA_COMPOSER_BAR_ID = "wacrm-wa-composerbar";
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const PANEL_POSITION_KEY = "crm_panel_position_v1";
   const CUSTOM_STAGES_KEY = "crm_custom_stages_v1";
@@ -835,6 +837,22 @@
     );
   };
 
+  const getConversationHeaderEl = () => {
+    return (
+      document.querySelector("#main header") ||
+      document.querySelector("[data-testid='conversation-header']") ||
+      null
+    );
+  };
+
+  const getConversationFooterEl = () => {
+    return (
+      document.querySelector("#main footer") ||
+      document.querySelector("footer") ||
+      null
+    );
+  };
+
   const getWhatsAppLoggedIn = () => {
     const hasQrUi =
       Boolean(document.querySelector("[data-testid='qrcode']")) ||
@@ -1596,6 +1614,256 @@
     state.nodes.statusEl.classList.toggle("error", isError);
   };
 
+  const isCrmSessionReady = () => {
+    return Boolean(getWhatsAppLoggedIn() && state.token && state.canUseCrm);
+  };
+
+  const setQuickBarButtonsState = (container, disabled) => {
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
+    container.querySelectorAll("button[data-wacrm-action]").forEach((button) => {
+      button.disabled = disabled;
+    });
+  };
+
+  const getQuickLeadLabel = () => {
+    if (state.currentLead) {
+      const owner = getOwnerLabel(state.currentLead.ownerUserId);
+      return `${state.currentLead.name || "Lead"} | ${getLeadPipelineLabel(state.currentLead)} | owner: ${owner}`;
+    }
+    if (state.currentChat?.name) {
+      return `${state.currentChat.name} | sin lead guardado`;
+    }
+    return "Sin conversacion activa";
+  };
+
+  const getQuickRiskLabel = () => {
+    const level = String(state.trustCenter?.antiSpamRisk?.level || "low");
+    const score = Number(state.trustCenter?.antiSpamRisk?.score || 0);
+    return `Riesgo: ${level} (${score})`;
+  };
+
+  const getQuickModeLabel = () => {
+    const mode = String(state.messagingMode?.resolvedMode || "crm_manual");
+    const provider = String(state.messagingMode?.provider || "dry_run");
+    return `Modo: ${mode} | ${provider}`;
+  };
+
+  const runCopilotReplyAndInsert = async () => {
+    await runCopilot("reply");
+    const text = String(state.nodes.copilotOutput?.value || "").trim();
+    if (!text) {
+      setStatus("No se genero sugerencia de Copiloto.", true);
+      return;
+    }
+    const inserted = insertMessageIntoComposer(text);
+    if (!inserted) {
+      return;
+    }
+    setStatus("Respuesta sugerida insertada. Envio manual.");
+  };
+
+  const runNativeQuickAction = (action) => {
+    const normalizedAction = String(action || "").trim();
+    if (!normalizedAction) {
+      return;
+    }
+
+    if (normalizedAction === "open-crm") {
+      openSectionFromMenu("crm");
+      return;
+    }
+
+    if (!getWhatsAppLoggedIn()) {
+      setStatus("Inicia sesion en WhatsApp Web para usar atajos CRM.", true);
+      return;
+    }
+    if (!state.token) {
+      setStatus("Inicia sesion en la extension para usar atajos CRM.", true);
+      return;
+    }
+    if (!state.canUseCrm) {
+      setStatus("Suscripcion inactiva. Los atajos CRM estan bloqueados.", true);
+      return;
+    }
+    if (!state.currentChat) {
+      setStatus("Abre una conversacion para usar atajos CRM.", true);
+      return;
+    }
+
+    if (normalizedAction === "save-lead") {
+      openSectionFromMenu("lead");
+      void withSyncGuard(saveLead);
+      return;
+    }
+    if (normalizedAction === "insert-template") {
+      openSectionFromMenu("actions");
+      insertTemplateIntoComposer();
+      return;
+    }
+    if (normalizedAction === "insert-followup") {
+      openSectionFromMenu("actions");
+      void withSyncGuard(insertManualFollowup);
+      return;
+    }
+    if (normalizedAction === "quick-followup") {
+      openSectionFromMenu("actions");
+      if (state.nodes.followupHoursInput) {
+        state.nodes.followupHoursInput.value = "24";
+      }
+      void withSyncGuard(createQuickFollowup);
+      return;
+    }
+    if (normalizedAction === "copilot-reply") {
+      openSectionFromMenu("actions");
+      void withSyncGuard(runCopilotReplyAndInsert);
+      return;
+    }
+    if (normalizedAction === "copilot-summary") {
+      openSectionFromMenu("actions");
+      void withSyncGuard(async () => {
+        await runCopilot("summary");
+      });
+    }
+  };
+
+  const bindQuickBarActions = (container) => {
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
+    if (container.dataset.boundActions === "1") {
+      return;
+    }
+    container.dataset.boundActions = "1";
+    container.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const button = target.closest("button[data-wacrm-action]");
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      runNativeQuickAction(button.dataset.wacrmAction);
+    });
+  };
+
+  const ensureTopQuickBar = () => {
+    const header = getConversationHeaderEl();
+    if (!(header instanceof HTMLElement)) {
+      state.nodes.waTopBar?.remove();
+      state.nodes.waTopBar = null;
+      return null;
+    }
+
+    let bar = state.nodes.waTopBar;
+    if (!(bar instanceof HTMLElement) || !document.body.contains(bar)) {
+      bar = document.createElement("section");
+      bar.id = WA_TOP_BAR_ID;
+      bar.className = "wacrm-wa-bar";
+      bar.setAttribute("role", "region");
+      bar.setAttribute("aria-label", "Atajos CRM en cabecera");
+      bar.innerHTML = `
+        <div class="wacrm-wa-chip-row">
+          <span class="wacrm-wa-pill" data-wacrm-lead>Sin conversacion activa</span>
+          <span class="wacrm-wa-pill subtle" data-wacrm-risk>Riesgo: low (0)</span>
+          <span class="wacrm-wa-pill subtle" data-wacrm-mode>Modo: crm_manual | dry_run</span>
+        </div>
+        <div class="wacrm-wa-actions">
+          <button type="button" class="wacrm-wa-btn" data-wacrm-action="save-lead">Guardar</button>
+          <button type="button" class="wacrm-wa-btn" data-wacrm-action="copilot-summary">Resumen</button>
+          <button type="button" class="wacrm-wa-btn" data-wacrm-action="open-crm">CRM</button>
+        </div>
+      `;
+      bindQuickBarActions(bar);
+      state.nodes.waTopBar = bar;
+    }
+
+    header.insertAdjacentElement("afterend", bar);
+    return bar;
+  };
+
+  const ensureComposerQuickBar = () => {
+    const footer = getConversationFooterEl();
+    if (!(footer instanceof HTMLElement) || !(footer.parentElement instanceof HTMLElement)) {
+      state.nodes.waComposerBar?.remove();
+      state.nodes.waComposerBar = null;
+      return null;
+    }
+
+    let bar = state.nodes.waComposerBar;
+    if (!(bar instanceof HTMLElement) || !document.body.contains(bar)) {
+      bar = document.createElement("section");
+      bar.id = WA_COMPOSER_BAR_ID;
+      bar.className = "wacrm-wa-bar wacrm-wa-bar-composer";
+      bar.setAttribute("role", "region");
+      bar.setAttribute("aria-label", "Atajos CRM en caja de mensaje");
+      bar.innerHTML = `
+        <div class="wacrm-wa-actions">
+          <button type="button" class="wacrm-wa-btn" data-wacrm-action="insert-template">Plantilla</button>
+          <button type="button" class="wacrm-wa-btn" data-wacrm-action="copilot-reply">Sugerir + insertar</button>
+          <button type="button" class="wacrm-wa-btn" data-wacrm-action="insert-followup">Seguimiento</button>
+          <button type="button" class="wacrm-wa-btn" data-wacrm-action="quick-followup">Recordatorio +24h</button>
+        </div>
+        <p class="wacrm-wa-hint" data-wacrm-hint>Inserta texto y envia manualmente.</p>
+      `;
+      bindQuickBarActions(bar);
+      state.nodes.waComposerBar = bar;
+    }
+
+    footer.insertAdjacentElement("beforebegin", bar);
+    return bar;
+  };
+
+  const renderNativeActionBars = () => {
+    const topBar = ensureTopQuickBar();
+    const composerBar = ensureComposerQuickBar();
+    const hasChat = Boolean(state.currentChat);
+    const canUseActions = isCrmSessionReady() && hasChat;
+    const disabled = !canUseActions || state.syncing;
+
+    if (topBar) {
+      topBar.classList.toggle("is-disabled", !canUseActions);
+      const leadEl = topBar.querySelector("[data-wacrm-lead]");
+      if (leadEl) {
+        const text = getQuickLeadLabel();
+        leadEl.textContent = text;
+        leadEl.setAttribute("title", text);
+      }
+      const riskEl = topBar.querySelector("[data-wacrm-risk]");
+      if (riskEl) {
+        riskEl.textContent = getQuickRiskLabel();
+      }
+      const modeEl = topBar.querySelector("[data-wacrm-mode]");
+      if (modeEl) {
+        modeEl.textContent = getQuickModeLabel();
+      }
+      setQuickBarButtonsState(topBar, disabled);
+    }
+
+    if (composerBar) {
+      composerBar.classList.toggle("is-disabled", !canUseActions);
+      const hintEl = composerBar.querySelector("[data-wacrm-hint]");
+      if (hintEl) {
+        if (!getWhatsAppLoggedIn()) {
+          hintEl.textContent = "Inicia sesion en WhatsApp Web para habilitar atajos.";
+        } else if (!state.token) {
+          hintEl.textContent = "Inicia sesion en la extension para habilitar atajos.";
+        } else if (!state.canUseCrm) {
+          hintEl.textContent = "Suscripcion inactiva. Atajos CRM bloqueados.";
+        } else if (!hasChat) {
+          hintEl.textContent = "Abre una conversacion para usar atajos.";
+        } else if (state.syncing) {
+          hintEl.textContent = "Sincronizando datos CRM...";
+        } else {
+          hintEl.textContent = "Inserta texto y confirma envio manual en WhatsApp.";
+        }
+      }
+      setQuickBarButtonsState(composerBar, disabled);
+    }
+  };
+
   const setActiveSection = (section) => {
     const allowed = new Set(["overview", "lead", "actions", "tutorial", "crm", "all"]);
     const nextSection = allowed.has(section) ? section : "overview";
@@ -1682,6 +1950,7 @@
     const gateEl = state.nodes.gateEl;
     const toolsEl = state.nodes.toolsEl;
     if (!gateEl || !toolsEl) {
+      renderNativeActionBars();
       return;
     }
 
@@ -1689,6 +1958,7 @@
       gateEl.textContent = "Inicia sesion en WhatsApp Web para habilitar WhatsWidget.";
       gateEl.classList.remove("wacrm-hidden");
       toolsEl.classList.add("wacrm-hidden");
+      renderNativeActionBars();
       return;
     }
 
@@ -1696,6 +1966,7 @@
       gateEl.textContent = "Inicia sesion en la extension para activar el CRM.";
       gateEl.classList.remove("wacrm-hidden");
       toolsEl.classList.add("wacrm-hidden");
+      renderNativeActionBars();
       return;
     }
 
@@ -1703,11 +1974,13 @@
       gateEl.textContent = "Tu suscripcion CRM no esta activa. Solicita activacion al administrador.";
       gateEl.classList.remove("wacrm-hidden");
       toolsEl.classList.add("wacrm-hidden");
+      renderNativeActionBars();
       return;
     }
 
     gateEl.classList.add("wacrm-hidden");
     toolsEl.classList.remove("wacrm-hidden");
+    renderNativeActionBars();
   };
 
   const updateLeadMeta = () => {
@@ -1897,6 +2170,7 @@
       if (state.nodes.chatEl) {
         state.nodes.chatEl.textContent = "Abre una conversacion para gestionar.";
       }
+      renderNativeActionBars();
       return;
     }
 
@@ -1919,6 +2193,7 @@
     }
 
     syncLeadWithPhone();
+    renderNativeActionBars();
   };
 
   const fetchWorkspaceData = async () => {
@@ -1957,6 +2232,7 @@
       renderTeamInbox();
       renderProductivityPanel();
       await refreshFollowupMeta();
+      renderNativeActionBars();
       return;
     }
 
@@ -2053,6 +2329,7 @@
     setStatus(
       `CRM activo (${modeLabel}) para ${state.me?.email || "workspace actual"} | compliance: ${riskLevel} (${riskScore}) | mode:${messagingMode}.`,
     );
+    renderNativeActionBars();
   };
 
   const insertMessageIntoComposer = (message) => {
@@ -2441,6 +2718,7 @@
       return;
     }
     state.syncing = true;
+    renderNativeActionBars();
     try {
       await task();
     } catch (error) {
@@ -2448,6 +2726,7 @@
     } finally {
       state.syncing = false;
       setModeState();
+      renderNativeActionBars();
     }
   };
 
@@ -3000,6 +3279,7 @@
       renderChatInfo();
       positionPanel();
       setModeState();
+      renderNativeActionBars();
     }, 2500);
 
     window.addEventListener("resize", positionPanel);
