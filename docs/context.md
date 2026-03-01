@@ -37,6 +37,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - panel arrastrable por la barra superior; doble clic para resetear posicion automatica
     - barra superior nativa en WhatsApp Web (debajo del header del chat) con estado vivo de lead/compliance/modo y atajos rapidos (`Guardar`, `Resumen`, `CRM`)
     - barra de acciones sobre la caja de mensaje con accesos rapidos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`)
+    - sincronizacion dinamica de datos del workspace (templates/leads/reminders/compliance) sin recargar pagina, con auto-refresh por intervalo y al volver foco/visibilidad
     - modo privacidad `Blur demo` para ocultar chats/mensajes durante demos
     - bloque `Copiloto asistido` (sugerir respuesta, resumir lead, siguiente accion y derivacion humana) sin auto-envio
     - `Compliance Trust Center` visible en panel (estado compliant, riesgo y alertas principales)

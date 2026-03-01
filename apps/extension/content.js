@@ -40,6 +40,9 @@
   const CRM_BUILD_TAG = "0.4.8-2026-02-28";
   const WA_TOP_BAR_ID = "wacrm-wa-topbar";
   const WA_COMPOSER_BAR_ID = "wacrm-wa-composerbar";
+  const VIEW_REFRESH_TICK_MS = 2500;
+  const WORKSPACE_AUTOSYNC_ACTIVE_MS = 12000;
+  const WORKSPACE_AUTOSYNC_IDLE_MS = 30000;
   const TUTORIAL_PROGRESS_KEY = "crm_tutorial_progress_v1";
   const PANEL_POSITION_KEY = "crm_panel_position_v1";
   const CUSTOM_STAGES_KEY = "crm_custom_stages_v1";
@@ -205,6 +208,7 @@
     collapsed: false,
     syncing: false,
     syncTimer: null,
+    lastWorkspaceSyncAt: 0,
     tutorialProgress: {},
     panelPosition: null,
     workspaceId: "",
@@ -1639,6 +1643,36 @@
     return Boolean(getWhatsAppLoggedIn() && state.token && state.canUseCrm);
   };
 
+  const shouldAutoSyncWorkspace = () => {
+    if (!state.token) {
+      return false;
+    }
+    if (!getWhatsAppLoggedIn()) {
+      return false;
+    }
+    return true;
+  };
+
+  const maybeAutoSyncWorkspaceData = (force = false) => {
+    if (!shouldAutoSyncWorkspace()) {
+      return;
+    }
+    if (state.syncing) {
+      return;
+    }
+    if (!force && document.visibilityState !== "visible") {
+      return;
+    }
+
+    const now = Date.now();
+    const intervalMs = document.hasFocus() ? WORKSPACE_AUTOSYNC_ACTIVE_MS : WORKSPACE_AUTOSYNC_IDLE_MS;
+    const lastSyncAt = Number(state.lastWorkspaceSyncAt || 0);
+    if (!force && now - lastSyncAt < intervalMs) {
+      return;
+    }
+    void withSyncGuard(fetchWorkspaceData);
+  };
+
   const setQuickBarButtonsState = (container, disabled) => {
     if (!(container instanceof HTMLElement)) {
       return;
@@ -2266,6 +2300,7 @@
       renderTeamInbox();
       renderProductivityPanel();
       await refreshFollowupMeta();
+      state.lastWorkspaceSyncAt = Date.now();
       renderNativeActionBars();
       return;
     }
@@ -2307,6 +2342,7 @@
       setModeState();
       await refreshFollowupMeta();
       setStatus("Sesion activa, pero suscripcion inactiva.", true);
+      state.lastWorkspaceSyncAt = Date.now();
       return;
     }
 
@@ -2363,6 +2399,7 @@
     setStatus(
       `CRM activo (${modeLabel}) para ${state.me?.email || "workspace actual"} | compliance: ${riskLevel} (${riskScore}) | mode:${messagingMode}.`,
     );
+    state.lastWorkspaceSyncAt = Date.now();
     renderNativeActionBars();
   };
 
@@ -3314,9 +3351,18 @@
       positionPanel();
       setModeState();
       renderNativeActionBars();
-    }, 2500);
+      maybeAutoSyncWorkspaceData(false);
+    }, VIEW_REFRESH_TICK_MS);
 
     window.addEventListener("resize", positionPanel);
+    window.addEventListener("focus", () => {
+      maybeAutoSyncWorkspaceData(true);
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        maybeAutoSyncWorkspaceData(true);
+      }
+    });
   };
 
   const positionPanel = () => {
