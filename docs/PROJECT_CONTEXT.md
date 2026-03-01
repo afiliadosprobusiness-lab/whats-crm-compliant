@@ -73,7 +73,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido suprime errores globales `Extension context invalidated` en `unhandledrejection/error` para evitar ruido en runtime al recargar extension.
   - Seguimiento manual asistido en panel embebido con limite diario local de cumplimiento (`20/dia`), siempre con envio manual.
   - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
-  - Dock lateral con atajos operativos y esquema de 2 niveles (primarios visibles + secundarios en `Mas`) para reducir sobrecarga visual.
+  - Dock lateral con atajos operativos en esquema de 2 niveles (primarios compactos tipo icono + secundarios en `Mas`) y tooltips contextuales para reducir sobrecarga visual.
   - Panel embebido arrastrable; doble clic en la barra superior reinicia posicion automatica.
   - Panel embebido agrega barra de estado/atajos junto al input (debajo del composer) con estado vivo de lead/compliance/modo y acciones (`Guardar`, `Resumen`, `CRM`) con paleta visual activa.
   - Panel embebido agrega barra de acciones sobre la caja de mensaje con atajos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos con colores de estado, manteniendo envio manual.

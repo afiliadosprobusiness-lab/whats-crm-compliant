@@ -2089,8 +2089,20 @@
       menu.classList.toggle("show-secondary", showSecondary);
       const moreBtn = state.nodes.dock?.querySelector("[data-action='toggle-more']");
       if (moreBtn instanceof HTMLButtonElement) {
-        moreBtn.textContent = showSecondary ? "Menos" : "Mas";
+        const tipText = showSecondary ? "Ocultar atajos secundarios" : "Mostrar mas atajos";
+        const moreLabel = showSecondary ? "Menos" : "Mas";
+        const glyph = moreBtn.querySelector("[data-dock-more-glyph]");
+        const text = moreBtn.querySelector(".wacrm-dock-text");
+        if (glyph instanceof HTMLElement) {
+          glyph.textContent = showSecondary ? "-" : "+";
+        }
+        if (text instanceof HTMLElement) {
+          text.textContent = moreLabel;
+        }
         moreBtn.setAttribute("aria-expanded", showSecondary ? "true" : "false");
+        moreBtn.setAttribute("aria-label", tipText);
+        moreBtn.dataset.tipBase = tipText;
+        moreBtn.dataset.tip = tipText;
       }
       return;
     }
@@ -2149,12 +2161,14 @@
       const action = String(button.dataset.action || "").trim();
       const mappedGuardAction = DOCK_ACTION_GUARD_MAP[action];
       const guardMessage = mappedGuardAction ? getQuickActionGuardMessage(mappedGuardAction) : "";
-      const baseTitle = String(button.dataset.baseTitle || button.getAttribute("title") || "").trim();
-      if (!button.dataset.baseTitle && baseTitle) {
-        button.dataset.baseTitle = baseTitle;
+      const baseTip = String(button.dataset.tipBase || button.getAttribute("title") || "").trim();
+      if (!button.dataset.tipBase && baseTip) {
+        button.dataset.tipBase = baseTip;
       }
-      if (baseTitle) {
-        button.setAttribute("title", guardMessage ? `${baseTitle} | ${guardMessage}` : baseTitle);
+      if (baseTip) {
+        const nextTip = guardMessage ? `${baseTip} | ${guardMessage}` : baseTip;
+        button.setAttribute("title", nextTip);
+        button.dataset.tip = nextTip;
       }
       button.classList.toggle("is-blocked", Boolean(guardMessage));
       button.setAttribute("aria-disabled", guardMessage ? "true" : "false");
@@ -2960,15 +2974,39 @@
     dock.innerHTML = `
       <button type="button" class="wacrm-dock-toggle" id="wacrm-dock-toggle" title="Abrir menu CRM">CRM</button>
       <div class="wacrm-dock-menu" id="wacrm-dock-menu">
-        <button type="button" class="wacrm-dock-item is-primary active" data-action="overview" data-section="overview" title="Inicio y leads calientes">Inicio</button>
-        <button type="button" class="wacrm-dock-item is-primary" data-action="save-lead" data-section="lead" title="Guardar lead del chat actual">Guardar</button>
-        <button type="button" class="wacrm-dock-item is-primary" data-action="insert-template" data-section="actions" title="Insertar plantilla seleccionada">Plantilla</button>
-        <button type="button" class="wacrm-dock-item is-primary" data-action="quick-followup" data-section="actions" title="Crear seguimiento rapido (24h)">Seguir</button>
-        <button type="button" class="wacrm-dock-item wacrm-dock-more" data-action="toggle-more" title="Mostrar mas atajos" aria-expanded="false">Mas</button>
+        <button type="button" class="wacrm-dock-item is-primary active" data-action="overview" data-section="overview" data-tip-base="Inicio y leads calientes" aria-label="Inicio y leads calientes" title="Inicio y leads calientes">
+          <span class="wacrm-dock-glyph" aria-hidden="true">IN</span>
+          <span class="wacrm-dock-text">Inicio</span>
+        </button>
+        <button type="button" class="wacrm-dock-item is-primary" data-action="save-lead" data-section="lead" data-tip-base="Guardar lead del chat actual" aria-label="Guardar lead del chat actual" title="Guardar lead del chat actual">
+          <span class="wacrm-dock-glyph" aria-hidden="true">GD</span>
+          <span class="wacrm-dock-text">Guardar</span>
+        </button>
+        <button type="button" class="wacrm-dock-item is-primary" data-action="insert-template" data-section="actions" data-tip-base="Insertar plantilla seleccionada" aria-label="Insertar plantilla seleccionada" title="Insertar plantilla seleccionada">
+          <span class="wacrm-dock-glyph" aria-hidden="true">PL</span>
+          <span class="wacrm-dock-text">Plantilla</span>
+        </button>
+        <button type="button" class="wacrm-dock-item is-primary" data-action="quick-followup" data-section="actions" data-tip-base="Crear seguimiento rapido (24h)" aria-label="Crear seguimiento rapido (24h)" title="Crear seguimiento rapido (24h)">
+          <span class="wacrm-dock-glyph" aria-hidden="true">SG</span>
+          <span class="wacrm-dock-text">Seguir</span>
+        </button>
+        <button type="button" class="wacrm-dock-item wacrm-dock-more" data-action="toggle-more" data-tip-base="Mostrar mas atajos" aria-label="Mostrar mas atajos" title="Mostrar mas atajos" aria-expanded="false">
+          <span class="wacrm-dock-glyph" data-dock-more-glyph aria-hidden="true">+</span>
+          <span class="wacrm-dock-text">Mas</span>
+        </button>
         <div class="wacrm-dock-secondary" id="wacrm-dock-secondary">
-          <button type="button" class="wacrm-dock-item is-secondary" data-action="crm" data-section="crm" title="Vista CRM Kanban">Kanban</button>
-          <button type="button" class="wacrm-dock-item is-secondary" data-action="tutorial" data-section="tutorial" title="Tutorial">Guia</button>
-          <button type="button" class="wacrm-dock-item is-secondary" data-action="all" data-section="all" title="Ver todo el panel">Todo</button>
+          <button type="button" class="wacrm-dock-item is-secondary" data-action="crm" data-section="crm" data-tip-base="Vista CRM Kanban" aria-label="Vista CRM Kanban" title="Vista CRM Kanban">
+            <span class="wacrm-dock-glyph" aria-hidden="true">KB</span>
+            <span class="wacrm-dock-text">Kanban</span>
+          </button>
+          <button type="button" class="wacrm-dock-item is-secondary" data-action="tutorial" data-section="tutorial" data-tip-base="Tutorial y guia rapida" aria-label="Tutorial y guia rapida" title="Tutorial y guia rapida">
+            <span class="wacrm-dock-glyph" aria-hidden="true">GU</span>
+            <span class="wacrm-dock-text">Guia</span>
+          </button>
+          <button type="button" class="wacrm-dock-item is-secondary" data-action="all" data-section="all" data-tip-base="Ver todo el panel" aria-label="Ver todo el panel" title="Ver todo el panel">
+            <span class="wacrm-dock-glyph" aria-hidden="true">TD</span>
+            <span class="wacrm-dock-text">Todo</span>
+          </button>
         </div>
       </div>
     `;
