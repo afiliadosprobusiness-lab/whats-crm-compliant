@@ -238,6 +238,8 @@
     templateModeStore: {},
     chatLeadBindingsStore: {},
     chatLeadBindings: {},
+    overdueReminderSignature: "",
+    dismissedReminderSignature: "",
     nodes: {},
   };
 
@@ -2755,6 +2757,7 @@
       renderOwnerSelect();
       renderTeamInbox();
       renderProductivityPanel();
+      renderReminderAlerts();
       await refreshFollowupMeta();
       state.lastWorkspaceSyncAt = Date.now();
       renderNativeActionBars();
@@ -2796,6 +2799,7 @@
       renderOwnerSelect();
       renderTeamInbox();
       renderProductivityPanel();
+      renderReminderAlerts();
       setModeState();
       await refreshFollowupMeta();
       setStatus("Sesion activa, pero suscripcion inactiva.", true);
@@ -2846,6 +2850,7 @@
     renderStageLeads();
     renderTeamInbox();
     renderProductivityPanel();
+    renderReminderAlerts();
     syncLeadWithPhone();
     await refreshFollowupMeta();
     setModeState();
@@ -2998,6 +3003,162 @@
       body: JSON.stringify({ note: "Derivacion manual a humano solicitada desde Copiloto." }),
     });
     setStatus("Lead marcado para derivacion humana.");
+  };
+
+  const getOverdueReminders = () => {
+    const reminders = Array.isArray(state.reminders) ? state.reminders : [];
+    const now = Date.now();
+    return reminders
+      .filter((reminder) => reminder && reminder.status !== "done")
+      .filter((reminder) => {
+        const dueTime = new Date(reminder.dueAt || "").getTime();
+        return !Number.isNaN(dueTime) && dueTime <= now;
+      })
+      .sort((a, b) => new Date(a.dueAt || 0).getTime() - new Date(b.dueAt || 0).getTime());
+  };
+
+  const getOverdueReminderSignature = (reminders) => {
+    const list = Array.isArray(reminders) ? reminders : [];
+    return list
+      .map((reminder) => `${String(reminder?.id || "")}:${String(reminder?.dueAt || "")}`)
+      .filter(Boolean)
+      .join("|")
+      .slice(0, 4000);
+  };
+
+  const closeReminderCenter = () => {
+    const overlay = state.nodes.reminderCenterOverlay;
+    if (!(overlay instanceof HTMLElement)) {
+      return;
+    }
+    overlay.classList.add("wacrm-hidden");
+    overlay.setAttribute("aria-hidden", "true");
+  };
+
+  const openReminderCenter = () => {
+    const overlay = state.nodes.reminderCenterOverlay;
+    if (!(overlay instanceof HTMLElement)) {
+      return;
+    }
+    overlay.classList.remove("wacrm-hidden");
+    overlay.setAttribute("aria-hidden", "false");
+    state.dismissedReminderSignature = state.overdueReminderSignature;
+    const toast = state.nodes.reminderToast;
+    if (toast instanceof HTMLElement) {
+      toast.classList.add("wacrm-hidden");
+    }
+  };
+
+  const renderReminderCenter = (overdueReminders = getOverdueReminders()) => {
+    const countEl = state.nodes.reminderBellCount;
+    const listEl = state.nodes.reminderCenterList;
+    const metaEl = state.nodes.reminderCenterMeta;
+    const bellBtn = state.nodes.reminderBellBtn;
+    if (!countEl || !listEl || !metaEl || !bellBtn) {
+      return;
+    }
+
+    const count = overdueReminders.length;
+    countEl.textContent = String(count);
+    countEl.classList.toggle("wacrm-hidden", count === 0);
+    bellBtn.classList.toggle("has-alert", count > 0);
+    bellBtn.setAttribute(
+      "title",
+      count > 0 ? `Tienes ${count} recordatorio(s) vencido(s)` : "Sin recordatorios vencidos",
+    );
+
+    metaEl.textContent = count > 0
+      ? `${count} recordatorio(s) vencido(s).`
+      : "Sin recordatorios vencidos.";
+    listEl.innerHTML = "";
+
+    if (count === 0) {
+      const empty = document.createElement("p");
+      empty.className = "wacrm-meta";
+      empty.textContent = "Todo al dia.";
+      listEl.appendChild(empty);
+      return;
+    }
+
+    overdueReminders.slice(0, 30).forEach((reminder) => {
+      const lead = state.leads.find((item) => String(item?.id || "") === String(reminder?.leadId || ""));
+      const dueLabel = new Date(reminder.dueAt || "").toLocaleString();
+
+      const row = document.createElement("div");
+      row.className = "wacrm-stage-row";
+      row.innerHTML = `
+        <button type="button" class="wacrm-stage-lead" data-reminder-open-lead="${String(lead?.id || "")}">
+          <span class="wacrm-hot-name">${String(lead?.name || "Lead").slice(0, 60)}</span>
+          <span class="wacrm-hot-meta">${dueLabel} | ${String(reminder?.note || "Sin nota").slice(0, 100)}</span>
+        </button>
+      `;
+
+      const actions = document.createElement("div");
+      actions.className = "wacrm-stage-actions";
+
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "wacrm-btn ghost wacrm-btn-xs";
+      openBtn.textContent = "Abrir chat";
+      openBtn.disabled = !lead;
+      openBtn.dataset.reminderAction = "open-chat";
+      openBtn.dataset.reminderLeadId = String(lead?.id || "");
+
+      const doneBtn = document.createElement("button");
+      doneBtn.type = "button";
+      doneBtn.className = "wacrm-btn wacrm-btn-xs";
+      doneBtn.textContent = "Completar";
+      doneBtn.dataset.reminderAction = "complete";
+      doneBtn.dataset.reminderId = String(reminder?.id || "");
+
+      actions.appendChild(openBtn);
+      actions.appendChild(doneBtn);
+      row.appendChild(actions);
+      listEl.appendChild(row);
+    });
+  };
+
+  const maybeShowReminderToast = (overdueReminders = getOverdueReminders()) => {
+    const toast = state.nodes.reminderToast;
+    const textEl = state.nodes.reminderToastText;
+    if (!(toast instanceof HTMLElement) || !(textEl instanceof HTMLElement)) {
+      return;
+    }
+
+    const signature = getOverdueReminderSignature(overdueReminders);
+    state.overdueReminderSignature = signature;
+
+    if (!signature) {
+      toast.classList.add("wacrm-hidden");
+      state.dismissedReminderSignature = "";
+      return;
+    }
+
+    if (state.dismissedReminderSignature === signature) {
+      return;
+    }
+
+    const first = overdueReminders[0];
+    const lead = state.leads.find((item) => String(item?.id || "") === String(first?.leadId || ""));
+    const leadLabel = String(lead?.name || "Lead").slice(0, 40);
+    textEl.textContent = overdueReminders.length === 1
+      ? `Recordatorio vencido: ${leadLabel}.`
+      : `Tienes ${overdueReminders.length} recordatorios vencidos.`;
+    toast.classList.remove("wacrm-hidden");
+  };
+
+  const dismissReminderToast = () => {
+    const toast = state.nodes.reminderToast;
+    if (toast instanceof HTMLElement) {
+      toast.classList.add("wacrm-hidden");
+    }
+    state.dismissedReminderSignature = state.overdueReminderSignature;
+  };
+
+  const renderReminderAlerts = () => {
+    const overdueReminders = getOverdueReminders();
+    renderReminderCenter(overdueReminders);
+    maybeShowReminderToast(overdueReminders);
   };
 
   const getNextDueReminderForLead = (leadId) => {
@@ -3432,6 +3593,14 @@
         <div class="wacrm-header">
           <span class="wacrm-title">WhatsWidget ${CRM_BUILD_TAG}</span>
           <div class="wacrm-header-actions">
+            <button type="button" class="wacrm-minify wacrm-reminder-bell" id="wacrm-reminder-bell" title="Sin recordatorios vencidos" aria-label="Abrir recordatorios vencidos">
+              <span class="wacrm-reminder-bell-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <path d="M12 22a2.6 2.6 0 0 0 2.4-1.6H9.6A2.6 2.6 0 0 0 12 22Zm7-5.3-1.8-2.2V10a5.2 5.2 0 1 0-10.4 0v4.5L5 16.7v1.3h14v-1.3Zm-3.3-.1H8.3l.9-1.1V10a2.8 2.8 0 1 1 5.6 0v5.5l.9 1.1Z" />
+                </svg>
+              </span>
+              <span class="wacrm-reminder-bell-count wacrm-hidden" id="wacrm-reminder-bell-count">0</span>
+            </button>
             <button type="button" class="wacrm-minify" id="wacrm-toggle-blur">Blur OFF</button>
             <button type="button" class="wacrm-minify" id="wacrm-toggle">Minimizar</button>
           </div>
@@ -3649,6 +3818,23 @@
             </div>
           </div>
         </div>
+        <div class="wacrm-phone-modal-overlay wacrm-hidden" id="wacrm-reminder-center-overlay" aria-hidden="true">
+          <div class="wacrm-phone-modal" role="dialog" aria-modal="true" aria-labelledby="wacrm-reminder-center-title">
+            <h4 id="wacrm-reminder-center-title">Recordatorios vencidos</h4>
+            <p class="wacrm-meta" id="wacrm-reminder-center-meta">Sin recordatorios vencidos.</p>
+            <div class="wacrm-stage-list" id="wacrm-reminder-center-list"></div>
+            <div class="wacrm-actions">
+              <button type="button" class="wacrm-btn ghost" id="wacrm-reminder-center-close">Cerrar</button>
+            </div>
+          </div>
+        </div>
+        <div class="wacrm-reminder-toast wacrm-hidden" id="wacrm-reminder-toast">
+          <p class="wacrm-meta" id="wacrm-reminder-toast-text">Tienes recordatorios vencidos.</p>
+          <div class="wacrm-actions">
+            <button type="button" class="wacrm-btn wacrm-btn-xs" id="wacrm-reminder-toast-open">Ver</button>
+            <button type="button" class="wacrm-btn ghost wacrm-btn-xs" id="wacrm-reminder-toast-dismiss">Cerrar</button>
+          </div>
+        </div>
       </div>
     `;
 
@@ -3714,6 +3900,13 @@
     state.nodes.reminderBtn = root.querySelector("#wacrm-save-reminder");
     state.nodes.blurBtn = root.querySelector("#wacrm-toggle-blur");
     state.nodes.copilotOutput = root.querySelector("#wacrm-copilot-output");
+    state.nodes.reminderBellBtn = root.querySelector("#wacrm-reminder-bell");
+    state.nodes.reminderBellCount = root.querySelector("#wacrm-reminder-bell-count");
+    state.nodes.reminderCenterOverlay = root.querySelector("#wacrm-reminder-center-overlay");
+    state.nodes.reminderCenterMeta = root.querySelector("#wacrm-reminder-center-meta");
+    state.nodes.reminderCenterList = root.querySelector("#wacrm-reminder-center-list");
+    state.nodes.reminderToast = root.querySelector("#wacrm-reminder-toast");
+    state.nodes.reminderToastText = root.querySelector("#wacrm-reminder-toast-text");
     state.nodes.phoneModalOverlay = root.querySelector("#wacrm-phone-modal-overlay");
     state.nodes.phoneModalInput = root.querySelector("#wacrm-phone-modal-input");
     state.nodes.phoneModalLeadName = root.querySelector("#wacrm-phone-modal-lead-name");
@@ -3747,6 +3940,7 @@
     renderOwnerSelect();
     renderTeamInbox();
     renderProductivityPanel();
+    renderReminderAlerts();
     applyBlurMode();
 
     root.querySelector("#wacrm-toggle").addEventListener("click", () => {
@@ -3818,6 +4012,73 @@
     });
     root.querySelector("#wacrm-reset-tutorial").addEventListener("click", () => {
       void resetTutorial();
+    });
+    state.nodes.reminderBellBtn?.addEventListener("click", () => {
+      openReminderCenter();
+    });
+    root.querySelector("#wacrm-reminder-center-close")?.addEventListener("click", () => {
+      closeReminderCenter();
+    });
+    state.nodes.reminderCenterOverlay?.addEventListener("click", (event) => {
+      if (event.target === state.nodes.reminderCenterOverlay) {
+        closeReminderCenter();
+      }
+    });
+    state.nodes.reminderCenterOverlay?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeReminderCenter();
+      }
+    });
+    root.querySelector("#wacrm-reminder-toast-open")?.addEventListener("click", () => {
+      openReminderCenter();
+    });
+    root.querySelector("#wacrm-reminder-toast-dismiss")?.addEventListener("click", () => {
+      dismissReminderToast();
+    });
+    state.nodes.reminderCenterList?.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const actionBtn = target.closest("button[data-reminder-action]");
+      if (!(actionBtn instanceof HTMLButtonElement)) {
+        const leadBtn = target.closest("button[data-reminder-open-lead]");
+        if (leadBtn instanceof HTMLButtonElement) {
+          const leadId = String(leadBtn.dataset.reminderOpenLead || "").trim();
+          const lead = state.leads.find((item) => String(item?.id || "") === leadId);
+          if (lead) {
+            fillLeadIntoForm(lead);
+            openSectionFromMenu("lead");
+          }
+        }
+        return;
+      }
+
+      const action = String(actionBtn.dataset.reminderAction || "").trim();
+      if (action === "open-chat") {
+        const leadId = String(actionBtn.dataset.reminderLeadId || "").trim();
+        const lead = state.leads.find((item) => String(item?.id || "") === leadId);
+        if (lead) {
+          openLeadChat(lead);
+          setStatus("Chat abierto desde recordatorios.");
+        }
+        return;
+      }
+      if (action === "complete") {
+        const reminderId = String(actionBtn.dataset.reminderId || "").trim();
+        if (!reminderId) {
+          return;
+        }
+        void withSyncGuard(async () => {
+          await apiRequest(`/reminders/${encodeURIComponent(reminderId)}/complete`, {
+            method: "PATCH",
+            body: JSON.stringify({}),
+          });
+          setStatus("Recordatorio completado.");
+          await fetchWorkspaceData();
+        });
+      }
     });
     root.querySelector("#wacrm-phone-modal-save").addEventListener("click", () => {
       applyPhoneFromModalAndSave();

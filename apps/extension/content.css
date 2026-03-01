@@ -57,6 +57,53 @@
   cursor: pointer;
 }
 
+.wacrm-reminder-bell {
+  position: relative;
+  width: 30px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wacrm-reminder-bell.has-alert {
+  background: rgb(255 255 255 / 24%);
+  border-color: rgb(255 255 255 / 68%);
+}
+
+.wacrm-reminder-bell-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+
+.wacrm-reminder-bell-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: #f8fafc;
+}
+
+.wacrm-reminder-bell-count {
+  position: absolute;
+  top: -5px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 72%);
+  background: #d7263d;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 35%);
+}
+
 html.wacrm-blur-mode #pane-side,
 html.wacrm-blur-mode #main {
   filter: blur(4px);
@@ -120,6 +167,23 @@ html.wacrm-blur-mode #wacrm-dock {
 
 #wacrm-phone-modal-helper.error {
   color: #b32020;
+}
+
+.wacrm-reminder-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+  width: min(340px, calc(100vw - 26px));
+  border: 1px solid rgb(255 255 255 / 46%);
+  border-radius: 14px;
+  padding: 10px;
+  background: linear-gradient(170deg, rgb(254 255 255 / 95%), rgb(237 247 255 / 92%));
+  box-shadow:
+    0 20px 34px rgb(0 0 0 / 32%),
+    inset 0 1px 0 rgb(255 255 255 / 75%);
+  display: grid;
+  gap: 8px;
 }
 
 .wacrm-wa-bar {
@@ -939,6 +1003,12 @@ html.wacrm-blur-mode #wacrm-dock {
     right: 8px;
     top: 8px;
     bottom: auto;
+    width: min(360px, calc(100vw - 16px));
+  }
+
+  .wacrm-reminder-toast {
+    right: 8px;
+    bottom: 8px;
     width: min(360px, calc(100vw - 16px));
   }
 
