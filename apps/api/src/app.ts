@@ -7,6 +7,7 @@ import { loadEnv } from "./config/env.js";
 import { addDays } from "./core/time.js";
 import { errorHandler, notFoundHandler } from "./core/error-middleware.js";
 import { AppError } from "./core/errors.js";
+import { secureCompare } from "./core/security.js";
 import { requestIdMiddleware } from "./core/request-id.js";
 import { asyncHandler } from "./core/http.js";
 import { AuditRepository } from "./modules/audit/audit.repository.js";
@@ -162,7 +163,7 @@ export const createApp = () => {
       }
 
       const syncKey = String(req.header("x-admin-sync-key") || "").trim();
-      if (!syncKey || syncKey !== env.adminSyncKey) {
+      if (!secureCompare(syncKey, env.adminSyncKey)) {
         throw new AppError({
           statusCode: 401,
           code: "UNAUTHORIZED",
@@ -245,7 +246,7 @@ export const createApp = () => {
       }
 
       const syncKey = String(req.header("x-admin-sync-key") || "").trim();
-      if (!syncKey || syncKey !== env.adminSyncKey) {
+      if (!secureCompare(syncKey, env.adminSyncKey)) {
         throw new AppError({
           statusCode: 401,
           code: "UNAUTHORIZED",
@@ -302,7 +303,7 @@ export const createApp = () => {
     }),
   );
   app.use("/api/v1/admin", adminRouter);
-  app.use("/api/v1/webhooks", createWebhooksRouter(webhooksController));
+  app.use("/api/v1/webhooks", createWebhooksRouter(webhooksController, { adminSyncKey: env.adminSyncKey }));
 
   const crmRouter = Router();
   crmRouter.use(authMiddleware);

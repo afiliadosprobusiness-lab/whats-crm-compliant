@@ -477,6 +477,12 @@ button:hover {
   margin-top: 8px;
 }
 
+.chip-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .chip {
   border: 1px solid #cde0cf;
   border-radius: 999px;
@@ -490,6 +496,20 @@ button:hover {
 .chip.active {
   border-color: #8ac79d;
   background: #dff2e3;
+}
+
+.chip-remove {
+  padding: 2px 7px;
+  min-width: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  background: #fef3f3;
+  color: #812f2f;
+  border-color: #e9c3c3;
+}
+
+.chip-remove:hover {
+  background: #f9dede;
 }
 
 .chip[data-inbox-view] {

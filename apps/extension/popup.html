@@ -286,7 +286,13 @@
             </label>
           </div>
           <button type="submit" data-i18n="btn_save_segment">Guardar pestana</button>
+          <button type="button" class="btn-ghost" id="segment-recommended-btn" data-i18n="btn_segment_seed">
+            Cargar segmentos recomendados
+          </button>
         </form>
+        <p class="hint" data-i18n="segment_help">
+          Crea filtros rapidos por tag/fuente/etapa. Toca la pestana para filtrar y usa X para eliminarla.
+        </p>
         <div id="segment-tabs" class="chip-row"></div>
         <ul id="segment-lead-list" class="list"></ul>
       </section>
@@ -311,7 +317,7 @@
         <form id="csv-import-form" class="grid">
           <label>
             <span data-i18n="csv_file_label">Archivo CSV</span>
-            <input type="file" name="file" accept=".csv,text/csv" required />
+            <input id="csv-file-input" type="file" name="file" accept=".csv,text/csv" required />
           </label>
           <div class="grid split-2">
             <label>
@@ -334,7 +340,14 @@
             </label>
           </div>
           <button type="submit" data-i18n="btn_import_csv">Importar CSV</button>
+          <button type="button" class="btn-ghost" id="csv-template-btn" data-i18n="btn_download_csv_template">
+            Descargar plantilla
+          </button>
         </form>
+        <div id="csv-preview" class="preflight-box is-hidden" aria-live="polite">
+          <p id="csv-preview-meta" class="hint"></p>
+          <ul id="csv-preview-list" class="list list-compact"></ul>
+        </div>
       </section>
 
       <p id="feedback" role="status" aria-live="polite"></p>

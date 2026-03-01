@@ -52,6 +52,9 @@ Response `201`:
 }
 ```
 
+Posibles errores adicionales:
+- `429 RATE_LIMITED` si se excede limite temporal de intentos de registro.
+
 ### `POST /api/v1/auth/login`
 
 Request:
@@ -65,6 +68,9 @@ Request:
 
 Response `200`: mismo shape que register.
 
+Posibles errores adicionales:
+- `429 RATE_LIMITED` si se excede limite temporal de intentos de login.
+
 ### `POST /api/v1/auth/google`
 
 Request:
@@ -77,6 +83,9 @@ Request:
 ```
 
 Response `200`: mismo shape que register/login.
+
+Posibles errores adicionales:
+- `429 RATE_LIMITED` si se excede limite temporal de intentos con Google.
 
 ### `GET /api/v1/auth/me`
 
@@ -783,6 +792,15 @@ Recepcion de eventos.
 
 Lista de eventos recientes (debug MVP).
 
+Header requerido:
+
+- `x-admin-sync-key: <ADMIN_SYNC_KEY>`
+
+Posibles errores:
+
+- `401 UNAUTHORIZED` si falta o no coincide `x-admin-sync-key`.
+- `503 INTERNAL_ERROR` si el servidor no tiene `ADMIN_SYNC_KEY` configurado.
+
 ## Changelog del Contrato
 
 - Fecha: 2026-02-27
@@ -839,3 +857,8 @@ Lista de eventos recientes (debug MVP).
 - Cambio: se agregan `GET /api/v1/leads/inbox`, `PATCH /api/v1/leads/:leadId/assign`, `POST /api/v1/leads/:leadId/health-events`, `GET /api/v1/compliance/messaging-mode` y `GET /api/v1/analytics/productivity`; ademas se extiende `lead` con owner/health/SLA
 - Tipo: non-breaking
 - Impacto: habilita flujo multiagente, health score operativo, visibilidad de modo dual CRM vs Cloud API y dashboard de productividad sin romper endpoints existentes
+
+- Fecha: 2026-03-01
+- Cambio: hardening de seguridad en auth/webhooks (`429` por limite de intentos en `register/login/google` y proteccion de `GET /api/v1/webhooks/whatsapp/events` con `x-admin-sync-key`)
+- Tipo: non-breaking
+- Impacto: reduce riesgo de fuerza bruta y evita exposicion publica de eventos de webhook

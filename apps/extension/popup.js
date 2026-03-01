@@ -41,6 +41,7 @@ const I18N = {
     btn_save_segment: "Save tab",
     btn_open_chat_manual: "Open chat (manual)",
     btn_import_csv: "Import CSV",
+    btn_download_csv_template: "Download template",
     hero_subtitle: "CRM for leads, templates, campaigns and reminders in WhatsApp Web.",
     session_none: "No session",
     login_required: "Sign in to use CRM.",
@@ -59,8 +60,12 @@ const I18N = {
     chat_opened: "Chat opened in WhatsApp Web.",
     segment_invalid: "Complete tab name and value.",
     segment_exists: "A similar tab already exists.",
+    segment_exists_activated: "That tab already exists. We activated it for you.",
     segment_saved: "Tab saved.",
     segment_removed: "Tab removed.",
+    btn_segment_seed: "Load recommended segments",
+    segment_seeded: "Recommended segments loaded.",
+    segment_help: "Create quick filters by tag/source/stage. Tap the tab to filter and use X to delete it.",
     no_segment_leads: "No leads in this segment.",
     all_segments: "All",
     use_btn: "Use",
@@ -77,6 +82,12 @@ const I18N = {
     csv_processing: "Importing CSV...",
     csv_no_rows: "CSV has no valid rows.",
     csv_import_result: "CSV import completed.",
+    csv_template_downloaded: "CSV template downloaded.",
+    csv_preview_none: "No valid rows were detected in this file.",
+    csv_preview_rows: "Rows",
+    csv_preview_delimiter: "Delimiter",
+    csv_preview_sample: "Preview",
+    csv_preview_phone_invalid: "invalid phone",
     backend_config_title: "Backend URL",
     backend_url_label: "BACKEND_URL",
     btn_save_backend_url: "Save BACKEND_URL",
@@ -136,6 +147,7 @@ const I18N = {
     btn_save_segment: "Salvar aba",
     btn_open_chat_manual: "Abrir chat (manual)",
     btn_import_csv: "Importar CSV",
+    btn_download_csv_template: "Baixar modelo",
     hero_subtitle: "CRM para leads, modelos, campanhas e lembretes no WhatsApp Web.",
     session_none: "Sem sessao",
     login_required: "Entre para usar o CRM.",
@@ -154,8 +166,12 @@ const I18N = {
     chat_opened: "Chat aberto no WhatsApp Web.",
     segment_invalid: "Preencha nome e valor da aba.",
     segment_exists: "Ja existe uma aba semelhante.",
+    segment_exists_activated: "Essa aba ja existe. Ela foi ativada para voce.",
     segment_saved: "Aba salva.",
     segment_removed: "Aba removida.",
+    btn_segment_seed: "Carregar segmentos recomendados",
+    segment_seeded: "Segmentos recomendados carregados.",
+    segment_help: "Crie filtros por tag/fonte/etapa. Toque na aba para filtrar e use X para remover.",
     no_segment_leads: "Sem leads neste segmento.",
     all_segments: "Todos",
     use_btn: "Usar",
@@ -172,6 +188,12 @@ const I18N = {
     csv_processing: "Importando CSV...",
     csv_no_rows: "CSV sem linhas validas.",
     csv_import_result: "Importacao CSV concluida.",
+    csv_template_downloaded: "Modelo CSV baixado.",
+    csv_preview_none: "Nenhuma linha valida detectada neste arquivo.",
+    csv_preview_rows: "Linhas",
+    csv_preview_delimiter: "Delimitador",
+    csv_preview_sample: "Preview",
+    csv_preview_phone_invalid: "telefone invalido",
     backend_config_title: "Backend URL",
     backend_url_label: "BACKEND_URL",
     btn_save_backend_url: "Salvar BACKEND_URL",
@@ -361,6 +383,46 @@ const normalizeSegmentsStore = (value) => {
   return result;
 };
 
+const RECOMMENDED_SEGMENTS = [
+  { name: "Leads Calientes", type: "tag", value: "caliente" },
+  { name: "Urgentes", type: "tag", value: "urgente" },
+  { name: "Premium", type: "tag", value: "premium" },
+  { name: "Negociacion", type: "stage", value: "qualified" },
+  { name: "Contactado", type: "stage", value: "contacted" },
+  { name: "Referidos", type: "source", value: "referido" },
+];
+
+const mergeRecommendedSegments = (segments, seed = RECOMMENDED_SEGMENTS) => {
+  const current = Array.isArray(segments) ? segments : [];
+  const byKey = new Set(
+    current.map((item) => `${String(item.type || "").trim()}::${slugTag(item.value || "")}`),
+  );
+
+  const additions = [];
+  seed.forEach((item) => {
+    const type = String(item.type || "tag").trim();
+    const value = String(item.value || "").trim().slice(0, 40);
+    const name = String(item.name || "").trim().slice(0, 24);
+    if (!type || !value || !name) {
+      return;
+    }
+    const key = `${type}::${slugTag(value)}`;
+    if (byKey.has(key)) {
+      return;
+    }
+    byKey.add(key);
+    additions.push({
+      id: `seg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      type,
+      value,
+    });
+  });
+
+  const merged = [...current, ...additions].slice(0, 12);
+  return { merged, added: additions.length };
+};
+
 const getWorkspaceKey = () => {
   return String(state.workspace?.id || "__default__").trim();
 };
@@ -383,6 +445,90 @@ const persistSegments = async () => {
   });
 };
 
+const POPUP_HELP_BY_ID = {
+  "language-select": "Cambia idioma de la interfaz del popup.",
+  "logout-btn": "Cierra tu sesion actual del CRM.",
+  "campaign-preflight-btn": "Valida bloqueos/riesgo antes de ejecutar una campaña.",
+  "campaign-template-id": "Selecciona la plantilla que se usara en la campaña masiva.",
+  "campaign-recipients": "Selecciona leads con consentimiento opted_in.",
+  "reminder-lead-id": "Selecciona el lead al que pertenece el recordatorio.",
+  "segment-tabs": "Toca una pestaña para filtrar leads; usa X para eliminarla.",
+  "segment-lead-list": "Lista de leads del segmento activo.",
+  "segment-recommended-btn": "Crea en 1 clic los segmentos sugeridos para priorizar trabajo comercial.",
+  "csv-file-input": "Carga un CSV con columnas como nombre y telefono.",
+  "csv-template-btn": "Descarga una plantilla CSV con columnas compatibles para importar leads.",
+  "csv-preview": "Vista previa de filas detectadas antes de importar.",
+};
+
+const POPUP_HELP_BY_NAME = {
+  email: "Correo de acceso del usuario owner/agente.",
+  password: "Contrasena de acceso (minimo 6 caracteres).",
+  companyName: "Nombre comercial de tu empresa/workspace.",
+  name: "Nombre de referencia para guardar el registro.",
+  phoneE164: "Telefono en formato E.164. Ejemplo: +51999999999.",
+  consentStatus: "Estado de consentimiento del contacto para compliance.",
+  consentSource: "Origen del consentimiento (ejemplo: form_web, referido, csv_import).",
+  stage: "Etapa comercial del lead.",
+  tags: "Etiquetas separadas por coma para segmentar mejor.",
+  body: "Mensaje base de la plantilla. Usa {{name}} para personalizar.",
+  templateId: "Plantilla que sera usada para esta accion.",
+  dueAt: "Fecha y hora en la que quieres recibir el recordatorio.",
+  note: "Nota corta para recordar la accion a ejecutar.",
+  type: "Tipo de filtro para la pestaña personalizada.",
+  value: "Valor del filtro segun el tipo elegido (tag, fuente, etapa, etc.).",
+  message: "Mensaje opcional para abrir chat con numero no guardado.",
+  file: "Archivo CSV a importar en el CRM.",
+  ownerUserId: "Usuario responsable del lead.",
+};
+
+const popupControlLabel = (control) => {
+  if (!(control instanceof HTMLElement)) {
+    return "";
+  }
+  if (control.id && POPUP_HELP_BY_ID[control.id]) {
+    return POPUP_HELP_BY_ID[control.id];
+  }
+  const name = control.getAttribute("name") || "";
+  if (name && POPUP_HELP_BY_NAME[name]) {
+    return POPUP_HELP_BY_NAME[name];
+  }
+
+  const labelEl = control.closest("label");
+  if (labelEl instanceof HTMLElement) {
+    const span = labelEl.querySelector("span");
+    const raw = String(span?.textContent || labelEl.textContent || "").replace(/\s+/g, " ").trim();
+    if (raw) {
+      return control instanceof HTMLButtonElement
+        ? `${raw}. Pulsa para ejecutar esta accion.`
+        : `${raw}. Completa este dato y luego guarda.`;
+    }
+  }
+
+  const text = String(control.textContent || "").replace(/\s+/g, " ").trim();
+  if (control instanceof HTMLButtonElement && text) {
+    return `${text}. Pulsa para ejecutar esta accion.`;
+  }
+  return "";
+};
+
+const applyPopupTooltips = () => {
+  document.querySelectorAll("button, input, select, textarea, summary").forEach((node) => {
+    if (!(node instanceof HTMLElement)) {
+      return;
+    }
+    const tip = popupControlLabel(node);
+    if (tip) {
+      node.setAttribute("title", tip);
+      if (node instanceof HTMLButtonElement && !node.getAttribute("aria-label")) {
+        const text = String(node.textContent || "").replace(/\s+/g, " ").trim();
+        if (text) {
+          node.setAttribute("aria-label", text);
+        }
+      }
+    }
+  });
+};
+
 const applyTranslations = () => {
   if (languageSelectEl) {
     languageSelectEl.value = state.language;
@@ -398,6 +544,7 @@ const applyTranslations = () => {
     }
     node.textContent = map[key] || node.dataset.i18nBase;
   });
+  applyPopupTooltips();
 };
 
 const tr = (key, fallback) => {
@@ -865,6 +1012,7 @@ const renderTemplates = () => {
     option.textContent = template.name;
     selectEl.appendChild(option);
   });
+  applyPopupTooltips();
 };
 
 const renderRecipients = () => {
@@ -893,6 +1041,7 @@ const renderRecipients = () => {
     label.appendChild(text);
     recipientsEl.appendChild(label);
   });
+  applyPopupTooltips();
 };
 
 const renderReminders = () => {
@@ -1003,6 +1152,7 @@ const renderReminders = () => {
       li.appendChild(actions);
       listEl.appendChild(li);
     });
+  applyPopupTooltips();
 };
 
 const renderPipeline = () => {
@@ -1133,7 +1283,7 @@ const renderSegmentTabs = () => {
   }
   tabsEl.innerHTML = "";
 
-  const addSegmentButton = (segmentId, label, title = "") => {
+  const createSegmentButton = (segmentId, label, title = "") => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "chip";
@@ -1148,19 +1298,22 @@ const renderSegmentTabs = () => {
       renderSegmentTabs();
       renderSegmentLeads();
     });
-    tabsEl.appendChild(btn);
+    return btn;
   };
 
-  addSegmentButton("all", tr("all_segments", "Todos"));
+  tabsEl.appendChild(createSegmentButton("all", tr("all_segments", "Todos")));
 
   state.segments.forEach((segment) => {
-    addSegmentButton(segment.id, segment.name, `${segment.type}: ${segment.value}`);
+    const group = document.createElement("span");
+    group.className = "chip-group";
+    group.appendChild(createSegmentButton(segment.id, segment.name, `${segment.type}: ${segment.value}`));
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
-    removeBtn.className = "chip";
-    removeBtn.textContent = `x ${segment.name}`;
-    removeBtn.title = tr("delete_btn", "Quitar");
+    removeBtn.className = "chip chip-remove";
+    removeBtn.textContent = "x";
+    removeBtn.title = `${tr("delete_btn", "Quitar")}: ${segment.name}`;
+    removeBtn.setAttribute("aria-label", `${tr("delete_btn", "Quitar")} ${segment.name}`);
     removeBtn.addEventListener("click", async () => {
       state.segments = state.segments.filter((item) => item.id !== segment.id);
       if (state.activeSegmentId === segment.id) {
@@ -1171,8 +1324,10 @@ const renderSegmentTabs = () => {
       renderSegmentLeads();
       setFeedback(tr("segment_removed", "Pestana eliminada."));
     });
-    tabsEl.appendChild(removeBtn);
+    group.appendChild(removeBtn);
+    tabsEl.appendChild(group);
   });
+  applyPopupTooltips();
 };
 
 const renderSegmentLeads = () => {
@@ -1241,6 +1396,7 @@ const renderSegmentLeads = () => {
     li.appendChild(actions);
     listEl.appendChild(li);
   });
+  applyPopupTooltips();
 };
 
 const refreshSubscription = async () => {
@@ -1300,6 +1456,7 @@ const refreshData = async () => {
   renderProductivity();
   renderSegmentTabs();
   renderSegmentLeads();
+  applyPopupTooltips();
   await announceWorkspaceRefresh(false);
 };
 
@@ -1369,12 +1526,59 @@ const resetState = () => {
   renderProductivity();
   renderSegmentTabs();
   renderSegmentLeads();
+  clearCsvPreview();
   setCrmVisibility(false);
 };
 
 const normalizeCsvHeader = (header) => slugTag(header).replace(/^_+|_+$/g, "");
 
-const parseCsvMatrix = (text) => {
+const detectCsvDelimiter = (text) => {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  if (!lines.length) {
+    return ",";
+  }
+
+  const delimiters = [",", ";", "\t"];
+  let bestDelimiter = ",";
+  let bestScore = -1;
+
+  const countDelimiter = (line, delimiter) => {
+    let inQuotes = false;
+    let count = 0;
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i];
+      const next = line[i + 1];
+      if (char === "\"") {
+        if (inQuotes && next === "\"") {
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+      if (!inQuotes && char === delimiter) {
+        count += 1;
+      }
+    }
+    return count;
+  };
+
+  delimiters.forEach((delimiter) => {
+    const score = lines.reduce((acc, line) => acc + countDelimiter(line, delimiter), 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestDelimiter = delimiter;
+    }
+  });
+
+  return bestDelimiter;
+};
+
+const parseCsvMatrix = (text, delimiter = ",") => {
   const rows = [];
   let row = [];
   let current = "";
@@ -1394,7 +1598,7 @@ const parseCsvMatrix = (text) => {
       continue;
     }
 
-    if (!inQuotes && char === ",") {
+    if (!inQuotes && char === delimiter) {
       row.push(current.trim());
       current = "";
       continue;
@@ -1426,8 +1630,8 @@ const parseCsvMatrix = (text) => {
   return rows;
 };
 
-const parseCsvObjects = (text) => {
-  const matrix = parseCsvMatrix(text);
+const parseCsvObjects = (text, delimiter = ",") => {
+  const matrix = parseCsvMatrix(text, delimiter);
   if (!matrix.length) {
     return [];
   }
@@ -1449,6 +1653,71 @@ const pickCsv = (row, aliases) => {
     }
   }
   return "";
+};
+
+const parseCsvPayload = (text) => {
+  const delimiter = detectCsvDelimiter(text);
+  const rows = parseCsvObjects(text, delimiter);
+  return { rows, delimiter };
+};
+
+const clearCsvPreview = () => {
+  const previewEl = document.getElementById("csv-preview");
+  const previewMetaEl = document.getElementById("csv-preview-meta");
+  const previewListEl = document.getElementById("csv-preview-list");
+  if (!previewEl || !previewMetaEl || !previewListEl) {
+    return;
+  }
+  previewMetaEl.textContent = "";
+  previewListEl.innerHTML = "";
+  previewEl.classList.add("is-hidden");
+};
+
+const downloadCsvTemplate = () => {
+  const rows = [
+    "name;phoneE164;consentStatus;consentSource;stage;tags",
+    "Lourdes;+51963958723;opted_in;form_web;qualified;premium,urgente",
+    "Daniel;+51955544123;pending;referido;new;caliente",
+  ];
+  const csv = `\uFEFF${rows.join("\r\n")}`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "plantilla_leads_whatswidget.csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+const renderCsvPreview = ({ rows, delimiter }) => {
+  const previewEl = document.getElementById("csv-preview");
+  const previewMetaEl = document.getElementById("csv-preview-meta");
+  const previewListEl = document.getElementById("csv-preview-list");
+  if (!previewEl || !previewMetaEl || !previewListEl) {
+    return;
+  }
+
+  previewEl.classList.remove("is-hidden");
+  previewListEl.innerHTML = "";
+  if (!rows.length) {
+    previewMetaEl.textContent = tr("csv_preview_none", "No se detectaron filas validas en este archivo.");
+    return;
+  }
+
+  const delimiterLabel = delimiter === "\t" ? "TAB" : delimiter;
+  const sampleRows = rows.slice(0, 5);
+  previewMetaEl.textContent = `${tr("csv_preview_rows", "Filas")}: ${rows.length} | ${tr("csv_preview_delimiter", "Delimitador")}: ${delimiterLabel} | ${tr("csv_preview_sample", "Vista previa")}: ${sampleRows.length}`;
+
+  sampleRows.forEach((row, index) => {
+    const name = pickCsv(row, ["name", "nombre", "contacto", "full_name"]) || `Lead ${index + 1}`;
+    const phone = normalizePhone(pickCsv(row, ["phonee164", "phone", "telefono", "celular", "numero", "whatsapp"]));
+    const stage = String(pickCsv(row, ["stage", "etapa"]) || "new").toLowerCase();
+    const li = document.createElement("li");
+    li.textContent = `${name} | ${phone || tr("csv_preview_phone_invalid", "telefono invalido")} | ${stage}`;
+    previewListEl.appendChild(li);
+  });
 };
 
 document.getElementById("login-form").addEventListener("submit", async (event) => {
@@ -1700,9 +1969,15 @@ document.getElementById("segment-form")?.addEventListener("submit", async (event
     return;
   }
 
-  const exists = state.segments.some((segment) => segment.type === type && slugTag(segment.value) === slugTag(value));
-  if (exists) {
-    setFeedback(tr("segment_exists", "Ya existe una pestana igual."), true);
+  const existing = state.segments.find((segment) => segment.type === type && slugTag(segment.value) === slugTag(value));
+  if (existing) {
+    state.activeSegmentId = existing.id;
+    await storageSet({ [ACTIVE_SEGMENT_STORAGE_KEY]: state.activeSegmentId });
+    renderSegmentTabs();
+    renderSegmentLeads();
+    setFeedback(
+      tr("segment_exists_activated", "Esa pestana ya existe. La activamos para ti."),
+    );
     return;
   }
 
@@ -1721,6 +1996,19 @@ document.getElementById("segment-form")?.addEventListener("submit", async (event
   renderSegmentTabs();
   renderSegmentLeads();
   setFeedback(tr("segment_saved", "Pestana guardada."));
+});
+
+document.getElementById("segment-recommended-btn")?.addEventListener("click", async () => {
+  const { merged, added } = mergeRecommendedSegments(state.segments);
+  state.segments = merged;
+  if (!state.segments.some((segment) => segment.id === state.activeSegmentId)) {
+    state.activeSegmentId = "all";
+  }
+  await persistSegments();
+  renderSegmentTabs();
+  renderSegmentLeads();
+  const message = `${tr("segment_seeded", "Segmentos recomendados cargados.")} +${added}`;
+  setFeedback(message);
 });
 
 document.getElementById("lead-inbox-filters")?.addEventListener("click", async (event) => {
@@ -1769,6 +2057,30 @@ document.getElementById("unsaved-form")?.addEventListener("submit", (event) => {
   }
 });
 
+document.getElementById("csv-file-input")?.addEventListener("change", async (event) => {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const file = target.files?.[0];
+  if (!(file instanceof File)) {
+    clearCsvPreview();
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    renderCsvPreview(parseCsvPayload(text));
+  } catch (_error) {
+    clearCsvPreview();
+  }
+});
+
+document.getElementById("csv-template-btn")?.addEventListener("click", () => {
+  downloadCsvTemplate();
+  setFeedback(tr("csv_template_downloaded", "Plantilla CSV descargada."));
+});
+
 document.getElementById("csv-import-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
@@ -1783,7 +2095,9 @@ document.getElementById("csv-import-form")?.addEventListener("submit", async (ev
 
   setFeedback(tr("csv_processing", "Importando CSV..."));
   const text = await file.text();
-  const rows = parseCsvObjects(text);
+  const parsedCsv = parseCsvPayload(text);
+  const rows = parsedCsv.rows;
+  renderCsvPreview(parsedCsv);
   if (!rows.length) {
     setFeedback(tr("csv_no_rows", "El CSV no trae filas validas."), true);
     return;
@@ -1836,6 +2150,7 @@ document.getElementById("csv-import-form")?.addEventListener("submit", async (ev
   await refreshData();
   setFeedback(`${tr("csv_import_result", "Importacion CSV completada.")} ok:${imported} | skip:${skipped} | err:${failed}`);
   event.currentTarget.reset();
+  clearCsvPreview();
 });
 
 languageSelectEl?.addEventListener("change", async () => {

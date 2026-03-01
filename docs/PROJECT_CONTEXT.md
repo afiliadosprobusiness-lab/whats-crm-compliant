@@ -14,6 +14,7 @@ Proyecto: `whatsapp-crm-compliant`
 1. Auth multiusuario:
    - Registro owner por empresa.
    - Login/logout por token bearer.
+   - Hardening auth: rate limit in-memory en `register/login/google` para reducir fuerza bruta.
    - Endpoint Google Auth disponible en API (`POST /api/v1/auth/google`) para integraciones controladas.
    - Gestion de usuarios del workspace (owner crea agentes).
 2. Suscripcion:
@@ -52,6 +53,7 @@ Proyecto: `whatsapp-crm-compliant`
    - Bitacora `audit_logs` para eventos de leads/campanas/recordatorios/compliance.
 10. Webhooks:
    - Verificacion y recepcion de eventos de WhatsApp (rutas fuera del middleware de auth/suscripcion para compatibilidad con Meta).
+   - `GET /api/v1/webhooks/whatsapp/events` protegido por `x-admin-sync-key` (debug no publico).
 11. Infra:
    - Persistencia Firestore para modulos core.
    - Runtime Vercel serverless (`apps/api/src/vercel.ts`).
@@ -72,13 +74,14 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido incluye guardas para `Extension context invalidated` durante recarga/update de extension (no rompe la UI).
   - Panel embebido suprime errores globales `Extension context invalidated` en `unhandledrejection/error` para evitar ruido en runtime al recargar extension.
   - Seguimiento manual asistido en panel embebido con limite diario local de cumplimiento (`20/dia`), siempre con envio manual.
-  - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
-  - Dock lateral con atajos operativos en esquema de 2 niveles (primarios compactos tipo icono + secundarios en `Mas`) y tooltips contextuales para reducir sobrecarga visual.
+  - Panel embebido con UX modular: tabs superiores + barras de atajos junto al composer, tutorial con checklist persistente y vista de leads calientes del dia.
   - Panel embebido arrastrable; doble clic en la barra superior reinicia posicion automatica.
   - Cabecera del panel embebido agrega campana de recordatorios vencidos con badge rojo, mini aviso emergente, sonido de alerta y centro de avisos con acciones rapidas (`Abrir chat`, `Completar`).
   - Popup y panel embebido refuerzan confirmaciones de acciones (guardado/actualizacion/error) con feedback visual explicito para reducir incertidumbre operativa.
   - Panel embebido agrega barra de estado/atajos junto al input (debajo del composer) con estado vivo de lead/compliance/modo y acciones (`Guardar`, `Resumen`, `CRM`) con paleta visual activa.
   - Panel embebido agrega barra de acciones sobre la caja de mensaje con atajos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos con colores de estado, manteniendo envio manual.
+  - Panel embebido y popup agregan ayudas hover (`title`) en controles clave para explicar para que sirve cada opcion y como usarla.
+  - Panel embebido refuerza `Tutorial` con checklist y guia completa de funciones (modulo + flujo recomendado de uso).
   - Panel embebido asocia automaticamente chat -> lead priorizando telefono y memoria de contexto por workspace (fallback por nombre unico), autocompleta telefono al guardar leads nuevos cuando el chat expone numero y abre mini modal de captura ("Pegar numero y guardar") cuando no se detecta telefono.
   - Panel embebido sincroniza datos en caliente sin recargar (templates/leads/reminders/compliance), con auto-refresh por intervalo y refresco inmediato al recuperar foco.
   - Popup y panel embebido propagan refresco inmediato via storage key `crm_workspace_refresh_tick` para reflejar altas/cambios sin recargar.
@@ -91,9 +94,10 @@ Proyecto: `whatsapp-crm-compliant`
   - Form de campana y envio.
   - Form/lista de recordatorios.
   - Vista embudo por etapas con Kanban drag & drop (mover leads entre columnas).
-  - Modulo `Pestanas personalizadas` en popup (segmentos por tag/fuente/etapa/urgencia/agente) persistido por workspace.
+  - Modulo `Pestanas personalizadas` en popup (segmentos por tag/fuente/etapa/urgencia/agente) persistido por workspace, con chip de filtro y boton `x` dedicado para borrado individual, sincronizado tambien en panel embebido (Contactos por etapa). Si el segmento ya existe (mismo tipo+valor), se activa automaticamente en vez de bloquear flujo.
+  - Popup y panel embebido permiten cargar segmentos recomendados en 1 clic para acelerar uso inicial (calientes, urgentes, premium, negociacion, contactado, referidos).
   - Modulo `Numero no guardado` para abrir chat por E.164 con envio siempre manual.
-  - Modulo `Importar CSV a CRM` (upsert de leads por telefono via API, sin scraping de WhatsApp).
+  - Modulo `Importar CSV a CRM` (upsert de leads por telefono via API, sin scraping de WhatsApp) con autodeteccion de delimitador (`;`, `,`, tab), mini vista previa y boton `Descargar plantilla` para iniciar con columnas compatibles.
   - Recordatorios en popup incluyen CTA a Google Calendar (link prellenado).
   - Popup endurece validaciones: campanas solo con seleccion valida de leads `opted_in` y recordatorios requieren fecha/hora valida.
   - Popup agrega `Compliance Trust Center`: badge global `Compliant Mode ON`, cobertura opt-in, cuota diaria, riesgo anti-spam y auditoria reciente.
@@ -104,6 +108,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Selector de idioma en popup (`ES/EN/PT`).
   - Panel embebido incluye `Blur demo` para privacidad visual en demos.
   - Panel embebido agrega `Copiloto asistido` (sugerencias/resumen/siguiente accion/derivacion), sin auto-envio y con rate limiter por usuario/minuto desde backend.
+  - Render de datos dinamicos endurecido con escape HTML en vistas del panel embebido (mitigacion XSS visual por nombres/notas/tags de leads).
   - Panel embebido muestra estado de cumplimiento (`Compliant Mode ON` + riesgo) en tiempo real.
   - Panel embebido muestra `Messaging Mode` efectivo (`crm_manual`/`cloud_api`) y proveedor (`dry_run`/`whatsapp_cloud_api`).
   - Panel embebido agrega `Bandeja multiagente` (Mis leads, Sin asignar, Vencidos, Todos) con asignacion de owner y health events rapidos.

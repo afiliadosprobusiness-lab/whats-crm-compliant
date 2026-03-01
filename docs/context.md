@@ -33,10 +33,12 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - seguimiento manual asistido con limite diario de cumplimiento (`20/dia`, solo inserta texto)
     - tablero de "leads calientes hoy" con acceso rapido a ficha
     - tutorial guiado con checklist persistente (storage local de extension)
-    - dock lateral + tabs para navegar modulos del panel, con atajos operativos en esquema de 2 niveles (primarios compactos tipo icono + secundarios en `Mas`) y tooltips contextuales
+    - navegacion principal simplificada con tabs superiores + barras de atajos junto al composer (sin dock lateral redundante)
     - panel arrastrable por la barra superior; doble clic para resetear posicion automatica
     - barra de estado/atajos CRM ubicada junto al input (debajo del composer) con estado vivo de lead/compliance/modo y atajos (`Guardar`, `Resumen`, `CRM`) con paleta visual activa
     - barra de acciones sobre la caja de mensaje con accesos rapidos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos con colores de estado
+    - ayudas hover (`title`) en controles clave del popup y panel embebido para explicar para que sirve cada opcion y como operarla
+    - tutorial del panel embebido con checklist operativo + guia completa de funciones (donde usar cada modulo y pasos recomendados)
     - cabecera del panel con campana de alertas de recordatorios vencidos (badge rojo), centro de avisos con acciones rapidas (`Abrir chat`/`Completar`), mini modal emergente y sonido de alerta al recibir eventos de vencimiento
     - feedback de acciones reforzado: confirmaciones visuales de exito/error en panel embebido (toast) y popup para evitar dudas de guardado/ejecucion
     - asociacion automatica chat -> lead con prioridad por telefono y memoria de contexto por workspace (fallback por nombre unico), incluyendo autocompletado de telefono al guardar lead nuevo cuando el chat expone numero y mini modal de captura ("Pegar numero y guardar") cuando no se detecta automaticamente
@@ -51,7 +53,9 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
   - Incluye `background service worker` para revisar recordatorios vencidos y emitir notificaciones de escritorio (sin auto-envio).
   - Popup CRM agrega capacidades avanzadas sin romper contrato API:
     - Kanban real con drag & drop por etapas (actualiza stage via `PATCH /api/v1/leads/:leadId/stage`)
-    - pestanas/segmentos personalizadas por workspace (filtros por tag, fuente, etapa, urgencia, agente)
+    - pestanas/segmentos personalizadas por workspace (filtros por tag, fuente, etapa, urgencia, agente) con chips de accion y borrado directo por `x` para reducir confusiones, visibles tanto en popup como en panel embebido (Contactos por etapa)
+    - segmentos recomendados en 1 clic (popup y panel embebido) para estandarizar priorizacion comercial inicial
+    - cuando se intenta crear una pestana duplicada (mismo tipo+valor), se activa automaticamente la existente para evitar friccion UX
     - apertura de chat a numero no guardado (`web.whatsapp.com/send?phone=...`) con envio manual
     - acceso directo a Google Calendar desde recordatorios (link prellenado)
     - validaciones operativas en popup: campanas solo con destinatarios `opted_in` y recordatorios con fecha/hora valida
@@ -61,7 +65,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - bandejas multiagente (`my`, `unassigned`, `overdue`, `all`) consumiendo `GET /api/v1/leads/inbox`
     - asignacion de owner por lead (`PATCH /api/v1/leads/:leadId/assign`) y eventos de health score (`POST /api/v1/leads/:leadId/health-events`)
     - dashboard de productividad (`GET /api/v1/analytics/productivity`) con KPIs operativos, funnel y resumen por agente
-    - importacion CSV de contactos al CRM via `POST /api/v1/leads/upsert`
+    - importacion CSV de contactos al CRM via `POST /api/v1/leads/upsert`, con autodeteccion de delimitador (`;`, `,`, tab), vista previa de filas y boton `Descargar plantilla` (CSV ejemplo) para reducir errores de formato
     - selector de idioma en popup (`ES/EN/PT`)
 - Persistencia actual: Firestore (colecciones por modulo).
 - Runtime de despliegue: Vercel Serverless (`apps/api/src/vercel.ts` + `vercel.json`).
@@ -124,7 +128,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Webhooks:
   - `GET /api/v1/webhooks/whatsapp`
   - `POST /api/v1/webhooks/whatsapp`
-  - `GET /api/v1/webhooks/whatsapp/events`
+  - `GET /api/v1/webhooks/whatsapp/events` (header `x-admin-sync-key`)
 
 ## Variables de Entorno
 
@@ -153,6 +157,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Validacion de entrada con Zod en todos los endpoints.
 - Errores estructurados (sin stack traces al cliente).
 - Autenticacion por bearer token de sesion.
+- Endpoints de auth (`register`, `login`, `google`) tienen rate limit in-memory por IP (y por email en login) para mitigar fuerza bruta.
 - Login Google requiere `idToken` emitido por Firebase Auth con `sign_in_provider=google.com`.
 - Si Firebase Auth aun no esta inicializado, se debe ejecutar `Get started` en Firebase Console > Authentication.
 - Autorizacion por rol (`owner`, `agent`) para acciones administrativas.
@@ -170,6 +175,9 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Eventos criticos de CRM/compliance se registran en `audit_logs` para trazabilidad operativa.
 - CORS restringido por `APP_ORIGIN`.
 - El endpoint `POST /api/v1/admin/sync-subscription` no usa sesion de usuario; exige secreto `x-admin-sync-key` para uso server-to-server.
+- El endpoint `GET /api/v1/webhooks/whatsapp/events` exige `x-admin-sync-key`; no queda expuesto publicamente.
+- Comparaciones de secretos (`x-admin-sync-key` y verificacion de webhook) usan comparacion segura en tiempo constante.
+- `WHATSAPP_VERIFY_TOKEN` debe configurarse con un valor fuerte en produccion (evitar defaults conocidos).
 - Endpoints de webhook (`/api/v1/webhooks/*`) quedan fuera de auth/subscription middleware para permitir verificacion/recepcion desde Meta.
 - Requests desde `chrome-extension://*` estan permitidos para uso de extension local (load unpacked).
 - Requests desde `https://web.whatsapp.com` estan permitidos para el panel embebido (content script).

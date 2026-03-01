@@ -1,5 +1,6 @@
 import type { EnvConfig } from "../../config/env.js";
 import { createId } from "../../core/id.js";
+import { secureCompare } from "../../core/security.js";
 import type { WebhookEventsRepository } from "./webhook-events.repository.js";
 
 type Provider = "dry_run" | "whatsapp_cloud_api";
@@ -64,7 +65,11 @@ export class WhatsAppService {
   }
 
   public verifyWebhook(mode: string | undefined, verifyToken: string | undefined): boolean {
-    return mode === "subscribe" && verifyToken === this.env.whatsappVerifyToken;
+    const expectedToken = String(this.env.whatsappVerifyToken || "").trim();
+    if (mode !== "subscribe" || !expectedToken) {
+      return false;
+    }
+    return secureCompare(String(verifyToken || "").trim(), expectedToken);
   }
 
   public async storeWebhookEvent(payload: unknown): Promise<void> {

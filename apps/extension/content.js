@@ -6,8 +6,12 @@
 
   const DEFAULT_API_BASE_URL = "https://whats-crm-compliant.vercel.app/api/v1";
   const BACKEND_URL_STORAGE_KEY = "crm_backend_url";
+  const SEGMENTS_STORAGE_KEY = "crm_segments_v1";
+  const ACTIVE_SEGMENT_STORAGE_KEY = "crm_active_segment_v1";
   const STORAGE_KEYS = [
     BACKEND_URL_STORAGE_KEY,
+    SEGMENTS_STORAGE_KEY,
+    ACTIVE_SEGMENT_STORAGE_KEY,
     "crm_api_base_url",
     "crm_token",
     "crm_google_client_id",
@@ -39,7 +43,7 @@
     { event: "no_response_72h", label: "72h" },
     { event: "spam_reported", label: "Spam" },
   ];
-  const CRM_BUILD_TAG = "0.4.8-2026-02-28";
+  const CRM_BUILD_TAG = "0.4.10-2026-03-01";
   const WA_TOP_BAR_ID = "wacrm-wa-topbar";
   const WA_COMPOSER_BAR_ID = "wacrm-wa-composerbar";
   const WORKSPACE_REFRESH_SIGNAL_KEY = "crm_workspace_refresh_tick";
@@ -103,6 +107,81 @@
       label: "Crear seguimiento",
       hint: "Programa recordatorio manual o rapido en horas.",
     },
+  ];
+  const TUTORIAL_FEATURE_GUIDE = [
+    {
+      title: "Lead rapido",
+      where: "Panel > Leads",
+      how: "Completa Nombre + Telefono E.164, define etapa/consentimiento y pulsa Guardar lead.",
+    },
+    {
+      title: "Plantillas",
+      where: "Popup > Plantillas / Panel > Acciones",
+      how: "Crea plantilla en popup y luego insertala en chat desde el panel. El envio siempre es manual.",
+    },
+    {
+      title: "Copiloto asistido",
+      where: "Panel > Acciones",
+      how: "Usa Sugerir respuesta, Resumir lead o Siguiente accion; revisa salida y luego inserta en chat.",
+    },
+    {
+      title: "Notas",
+      where: "Panel > Acciones",
+      how: "Escribe una nota y pulsa Guardar nota para dejar trazabilidad del seguimiento.",
+    },
+    {
+      title: "Recordatorios",
+      where: "Panel > Acciones / Popup > Recordatorios",
+      how: "Define fecha + nota y crea recordatorio. Tambien puedes usar seguimiento rapido en horas.",
+    },
+    {
+      title: "Bandeja multiagente",
+      where: "Panel > Inicio/CRM",
+      how: "Filtra Mis leads, Sin asignar, Vencidos o Todos para priorizar trabajo del equipo.",
+    },
+    {
+      title: "Kanban CRM",
+      where: "Panel > CRM",
+      how: "Arrastra leads entre columnas para cambiar etapa de forma visual.",
+    },
+    {
+      title: "Pestanas personalizadas",
+      where: "Popup > Pestanas personalizadas / Panel > Contactos por etapa",
+      how: "Crea filtros por tag/fuente/etapa; en panel selecciona segmento para filtrar lista.",
+    },
+    {
+      title: "Campana masiva",
+      where: "Popup > Campana masiva",
+      how: "Selecciona plantilla y leads opted_in, valida preflight y luego crea y envia.",
+    },
+    {
+      title: "Numero no guardado",
+      where: "Popup > Numero no guardado",
+      how: "Ingresa E.164 y abre chat con texto opcional sin crear contacto en agenda.",
+    },
+    {
+      title: "Importar CSV",
+      where: "Popup > Importar CSV",
+      how: "Carga CSV (coma, punto y coma o tab), revisa preview y ejecuta importacion por upsert.",
+    },
+    {
+      title: "Compliance y modo",
+      where: "Popup + Panel",
+      how: "Revisa riesgo anti-spam, cuota diaria y modo efectivo crm_manual/cloud_api antes de operar.",
+    },
+    {
+      title: "Blur demo",
+      where: "Panel > Header",
+      how: "Activa Blur ON para demos con privacidad visual.",
+    },
+  ];
+  const RECOMMENDED_SEGMENTS = [
+    { name: "Leads Calientes", type: "tag", value: "caliente" },
+    { name: "Urgentes", type: "tag", value: "urgente" },
+    { name: "Premium", type: "tag", value: "premium" },
+    { name: "Negociacion", type: "stage", value: "qualified" },
+    { name: "Contactado", type: "stage", value: "contacted" },
+    { name: "Referidos", type: "source", value: "referido" },
   ];
   const PROFILE_NOTE_PREFIX = "FICHA_INMO|";
   const SUGGESTED_TAGS_BY_TEMPLATE = {
@@ -198,6 +277,13 @@
       return false;
     }
   };
+
+  const escapeHtml = (value) => String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
   const state = {
     apiBaseUrl: DEFAULT_API_BASE_URL,
     token: "",
@@ -235,6 +321,9 @@
     customStages: [],
     customStageStore: {},
     stageFilterKey: "all",
+    segmentsStore: {},
+    segments: [],
+    activeSegmentId: "all",
     blurMode: false,
     templateMode: DEFAULT_TEMPLATE_MODE,
     templateModeStore: {},
@@ -774,6 +863,63 @@
     return normalized;
   };
 
+  const normalizeSegmentsStore = (value) => {
+    if (!value || typeof value !== "object") {
+      return {};
+    }
+
+    const normalized = {};
+    Object.entries(value).forEach(([workspaceKey, segments]) => {
+      if (!workspaceKey || !Array.isArray(segments)) {
+        return;
+      }
+      normalized[workspaceKey] = segments
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          id: String(item.id || "").trim().slice(0, 80),
+          name: String(item.name || "").trim().slice(0, 24),
+          type: String(item.type || "tag").trim(),
+          value: String(item.value || "").trim().slice(0, 40),
+        }))
+        .filter((item) => item.id && item.name && item.value)
+        .slice(0, 12);
+    });
+    return normalized;
+  };
+
+  const mergeRecommendedSegments = (segments, seed = RECOMMENDED_SEGMENTS) => {
+    const current = Array.isArray(segments) ? segments : [];
+    const byKey = new Set(
+      current.map((item) => `${String(item.type || "").trim()}::${slugTag(item.value || "")}`),
+    );
+    const additions = [];
+
+    seed.forEach((item) => {
+      const type = String(item.type || "tag").trim();
+      const value = String(item.value || "").trim().slice(0, 40);
+      const name = String(item.name || "").trim().slice(0, 24);
+      if (!type || !value || !name) {
+        return;
+      }
+      const key = `${type}::${slugTag(value)}`;
+      if (byKey.has(key)) {
+        return;
+      }
+      byKey.add(key);
+      additions.push({
+        id: `seg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name,
+        type,
+        value,
+      });
+    });
+
+    return {
+      merged: [...current, ...additions].slice(0, 12),
+      added: additions.length,
+    };
+  };
+
   const getChatBindingKeys = (chat = state.currentChat) => {
     if (!chat || typeof chat !== "object") {
       return [];
@@ -869,6 +1015,28 @@
   const applyWorkspaceChatLeadBindings = () => {
     const workspaceKey = getWorkspaceStorageKey();
     state.chatLeadBindings = normalizeChatLeadBindings(state.chatLeadBindingsStore[workspaceKey]);
+  };
+
+  const applyWorkspaceSegments = () => {
+    const workspaceKey = getWorkspaceStorageKey();
+    state.segments = Array.isArray(state.segmentsStore[workspaceKey]) ? state.segmentsStore[workspaceKey] : [];
+    const exists = state.activeSegmentId === "all" || state.segments.some((segment) => segment.id === state.activeSegmentId);
+    if (!exists) {
+      state.activeSegmentId = "all";
+    }
+  };
+
+  const persistSegments = async () => {
+    const workspaceKey = getWorkspaceStorageKey();
+    state.segmentsStore[workspaceKey] = state.segments;
+    await storageSet({
+      [SEGMENTS_STORAGE_KEY]: normalizeSegmentsStore(state.segmentsStore),
+      [ACTIVE_SEGMENT_STORAGE_KEY]: state.activeSegmentId,
+    });
+  };
+
+  const persistActiveSegment = async () => {
+    await storageSet({ [ACTIVE_SEGMENT_STORAGE_KEY]: state.activeSegmentId });
   };
 
   const persistChatLeadBindings = async () => {
@@ -1368,8 +1536,8 @@
       const healthScore = Number.isFinite(Number(lead.healthScore)) ? Number(lead.healthScore) : 50;
       const overdueFlag = isLeadOverdue(lead) ? " | SLA overdue" : "";
       info.innerHTML = `
-        <span class="wacrm-hot-name">${lead.name || "Sin nombre"}</span>
-        <span class="wacrm-hot-meta">${lead.stage || "new"} | owner: ${getOwnerLabel(lead.ownerUserId)} | health:${healthTemperature} (${healthScore})${overdueFlag}</span>
+        <span class="wacrm-hot-name">${escapeHtml(lead.name || "Sin nombre")}</span>
+        <span class="wacrm-hot-meta">${escapeHtml(lead.stage || "new")} | owner: ${escapeHtml(getOwnerLabel(lead.ownerUserId))} | health:${escapeHtml(healthTemperature)} (${healthScore})${escapeHtml(overdueFlag)}</span>
       `;
       info.addEventListener("click", () => {
         fillLeadIntoForm(lead);
@@ -1433,6 +1601,7 @@
       row.appendChild(actions);
       listEl.appendChild(row);
     });
+    applyControlTooltips();
   };
 
   const renderProductivityPanel = () => {
@@ -1636,8 +1805,8 @@
       button.type = "button";
       button.className = "wacrm-hot-item";
       button.innerHTML = `
-        <span class="wacrm-hot-name">${item.lead.name}</span>
-        <span class="wacrm-hot-meta">${getLeadPipelineLabel(item.lead)} | ${item.lead.phoneE164 || "-"}</span>
+        <span class="wacrm-hot-name">${escapeHtml(item.lead.name)}</span>
+        <span class="wacrm-hot-meta">${escapeHtml(getLeadPipelineLabel(item.lead))} | ${escapeHtml(item.lead.phoneE164 || "-")}</span>
       `;
       button.addEventListener("click", () => fillLeadIntoForm(item.lead));
       listEl.appendChild(button);
@@ -1653,11 +1822,52 @@
     window.location.href = `https://web.whatsapp.com/send?phone=${phoneDigits}`;
   };
 
+  const getActiveSegment = () => {
+    if (state.activeSegmentId === "all") {
+      return null;
+    }
+    return state.segments.find((segment) => segment.id === state.activeSegmentId) || null;
+  };
+
+  const leadMatchesSegment = (lead, segment) => {
+    const value = String(segment?.value || "").trim().toLowerCase();
+    if (!value) {
+      return false;
+    }
+
+    const tags = Array.isArray(lead?.tags) ? lead.tags.map((tag) => slugTag(tag)) : [];
+    if (segment.type === "stage") {
+      return String(lead?.stage || "").toLowerCase() === value || getLeadPipelineStageKey(lead) === normalizePipelineStageKey(value);
+    }
+    if (segment.type === "source") {
+      return String(lead?.consentSource || "").toLowerCase().includes(value);
+    }
+    if (segment.type === "urgency") {
+      const needle = slugTag(value);
+      return tags.some((tag) => tag.includes(`urg_${needle}`) || tag.includes("urgente") || tag === needle);
+    }
+    if (segment.type === "agent") {
+      const needle = slugTag(value);
+      const ownerLabel = slugTag(getOwnerLabel(lead?.ownerUserId));
+      const ownerId = slugTag(lead?.ownerUserId || "");
+      return (
+        ownerLabel.includes(needle) ||
+        ownerId.includes(needle) ||
+        tags.some((tag) => tag === `agent_${needle}` || tag === `asesor_${needle}` || tag === needle)
+      );
+    }
+
+    const needle = slugTag(value);
+    return tags.includes(needle);
+  };
+
   const getFilteredLeads = () => {
     const leads = Array.isArray(state.leads) ? state.leads : [];
-    const filtered = state.stageFilterKey === "all"
+    const byStage = state.stageFilterKey === "all"
       ? leads
       : leads.filter((lead) => getLeadPipelineStageKey(lead) === state.stageFilterKey);
+    const segment = getActiveSegment();
+    const filtered = !segment ? byStage : byStage.filter((lead) => leadMatchesSegment(lead, segment));
     return filtered
       .slice()
       .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
@@ -1671,9 +1881,11 @@
       return;
     }
     const leads = getFilteredLeads();
+    const activeSegment = getActiveSegment();
     const selectedStage = getPipelineStageByKey(state.stageFilterKey);
     const selectedLabel = state.stageFilterKey === "all" ? "todas" : (selectedStage?.label || prettifyKeyLabel(state.stageFilterKey));
-    metaEl.textContent = `${leads.length} contacto(s) en ${selectedLabel}.`;
+    const segmentLabel = activeSegment ? ` | segmento: ${activeSegment.name}` : "";
+    metaEl.textContent = `${leads.length} contacto(s) en ${selectedLabel}${segmentLabel}.`;
     listEl.innerHTML = "";
 
     if (leads.length === 0) {
@@ -1693,8 +1905,8 @@
       info.type = "button";
       info.className = "wacrm-stage-lead";
       info.innerHTML = `
-        <span class="wacrm-hot-name">${lead.name || "Sin nombre"}</span>
-        <span class="wacrm-hot-meta">${getLeadPipelineLabel(lead)} | ${lead.phoneE164 || "-"}</span>
+        <span class="wacrm-hot-name">${escapeHtml(lead.name || "Sin nombre")}</span>
+        <span class="wacrm-hot-meta">${escapeHtml(getLeadPipelineLabel(lead))} | ${escapeHtml(lead.phoneE164 || "-")}</span>
       `;
       info.addEventListener("click", () => {
         fillLeadIntoForm(lead);
@@ -1722,6 +1934,7 @@
       row.appendChild(actions);
       listEl.appendChild(row);
     });
+    applyControlTooltips();
     renderCrmBoard();
   };
 
@@ -1756,7 +1969,7 @@
       const header = document.createElement("div");
       header.className = "wacrm-kanban-col-head";
       header.innerHTML = `
-        <strong>${stage.label}</strong>
+        <strong>${escapeHtml(stage.label)}</strong>
         <span>${stageLeads.length}</span>
       `;
 
@@ -1804,9 +2017,9 @@
           card.draggable = true;
           card.dataset.leadId = lead.id || "";
           card.innerHTML = `
-            <button type="button" class="wacrm-kanban-title">${lead.name || "Sin nombre"}</button>
-            <p class="wacrm-kanban-meta">${lead.phoneE164 || "-"}</p>
-            <p class="wacrm-kanban-meta">${(Array.isArray(lead.tags) ? lead.tags.slice(0, 3) : []).join(", ") || "Sin tags"}</p>
+            <button type="button" class="wacrm-kanban-title">${escapeHtml(lead.name || "Sin nombre")}</button>
+            <p class="wacrm-kanban-meta">${escapeHtml(lead.phoneE164 || "-")}</p>
+            <p class="wacrm-kanban-meta">${escapeHtml((Array.isArray(lead.tags) ? lead.tags.slice(0, 3) : []).join(", ") || "Sin tags")}</p>
             <div class="wacrm-stage-actions">
               <button type="button" class="wacrm-btn ghost wacrm-btn-xs wacrm-kanban-use">Usar</button>
               <button type="button" class="wacrm-btn ghost wacrm-btn-xs wacrm-kanban-open">Abrir</button>
@@ -1835,6 +2048,83 @@
       column.appendChild(header);
       column.appendChild(list);
       boardEl.appendChild(column);
+    });
+    applyControlTooltips();
+  };
+
+  const renderSegmentFilters = () => {
+    const filtersEl = state.nodes.segmentFiltersEl;
+    const metaEl = state.nodes.segmentFilterMetaEl;
+    if (!filtersEl || !metaEl) {
+      return;
+    }
+
+    if (state.activeSegmentId !== "all" && !state.segments.some((segment) => segment.id === state.activeSegmentId)) {
+      state.activeSegmentId = "all";
+    }
+
+    filtersEl.innerHTML = "";
+    const activeSegment = getActiveSegment();
+    if (!state.segments.length) {
+      metaEl.textContent = "Sin pestanas personalizadas. Crea una en popup > Pestanas personalizadas.";
+      return;
+    }
+
+    metaEl.textContent = activeSegment
+      ? `Segmento activo: ${activeSegment.name} (${activeSegment.type}:${activeSegment.value}).`
+      : "Segmento activo: todos.";
+
+    const allBtn = document.createElement("button");
+    allBtn.type = "button";
+    allBtn.className = "wacrm-chip wacrm-filter-chip";
+    allBtn.textContent = "Todos segmentos";
+    allBtn.classList.toggle("active", state.activeSegmentId === "all");
+    allBtn.title = "Muestra contactos de cualquier segmento guardado.";
+    allBtn.addEventListener("click", () => {
+      state.activeSegmentId = "all";
+      void persistActiveSegment();
+      renderSegmentFilters();
+      renderStageLeads();
+    });
+    filtersEl.appendChild(allBtn);
+
+    state.segments.forEach((segment) => {
+      const group = document.createElement("span");
+      group.className = "wacrm-segment-group";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "wacrm-chip wacrm-filter-chip";
+      button.textContent = segment.name;
+      button.classList.toggle("active", segment.id === state.activeSegmentId);
+      button.title = `Filtra por ${segment.type}:${segment.value}.`;
+      button.addEventListener("click", () => {
+        state.activeSegmentId = segment.id;
+        void persistActiveSegment();
+        renderSegmentFilters();
+        renderStageLeads();
+      });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "wacrm-chip wacrm-segment-remove";
+      removeBtn.textContent = "x";
+      removeBtn.title = `Eliminar pestana ${segment.name}.`;
+      removeBtn.setAttribute("aria-label", `Eliminar pestana ${segment.name}`);
+      removeBtn.addEventListener("click", () => {
+        state.segments = state.segments.filter((item) => item.id !== segment.id);
+        if (state.activeSegmentId === segment.id) {
+          state.activeSegmentId = "all";
+        }
+        void persistSegments();
+        renderSegmentFilters();
+        renderStageLeads();
+        setStatus(`Pestana eliminada: ${segment.name}.`, false, { toast: true });
+      });
+
+      group.appendChild(button);
+      group.appendChild(removeBtn);
+      filtersEl.appendChild(group);
     });
   };
 
@@ -1873,6 +2163,8 @@
       });
       filtersEl.appendChild(button);
     });
+    renderSegmentFilters();
+    applyControlTooltips();
   };
 
   const renderCustomStageMeta = () => {
@@ -1955,14 +2247,38 @@
 
       const content = document.createElement("span");
       content.className = "wacrm-check-content";
-      content.innerHTML = `
-        <strong>${step.label}</strong>
-        <small>${step.hint}</small>
-      `;
+      const title = document.createElement("strong");
+      title.textContent = step.label;
+      const hint = document.createElement("small");
+      hint.textContent = step.hint;
+      content.appendChild(title);
+      content.appendChild(hint);
 
       row.appendChild(checkbox);
       row.appendChild(content);
       listEl.appendChild(row);
+    });
+
+    const guideEl = state.nodes.tutorialGuideEl;
+    if (!(guideEl instanceof HTMLElement)) {
+      return;
+    }
+    guideEl.innerHTML = "";
+    TUTORIAL_FEATURE_GUIDE.forEach((item) => {
+      const row = document.createElement("article");
+      row.className = "wacrm-guide-row";
+
+      const title = document.createElement("strong");
+      title.textContent = item.title;
+      const where = document.createElement("small");
+      where.textContent = `Donde: ${item.where}`;
+      const how = document.createElement("small");
+      how.textContent = `Como: ${item.how}`;
+
+      row.appendChild(title);
+      row.appendChild(where);
+      row.appendChild(how);
+      guideEl.appendChild(row);
     });
   };
 
@@ -2052,6 +2368,107 @@
       return;
     }
     helpEl.textContent = getQuickActionHelpText(action);
+  };
+
+  const PANEL_HELP_BY_ID = {
+    "wacrm-template-mode": "Elige la plantilla operativa (General o Inmobiliaria) para adaptar etiquetas, etapas y ficha.",
+    "wacrm-name": "Nombre del lead. Completa este dato y luego pulsa Guardar lead.",
+    "wacrm-phone": "Telefono del lead en formato E.164 (ej: +51999999999). Es obligatorio para guardar.",
+    "wacrm-stage": "Etapa comercial actual del lead. Puedes cambiarla y actualizar etapa.",
+    "wacrm-consent": "Estado de consentimiento del lead para mensajes compliant.",
+    "wacrm-owner-user": "Responsable del lead en la bandeja multiagente.",
+    "wacrm-tags": "Etiquetas separadas por coma para segmentar y filtrar mejor.",
+    "wacrm-segment-seed": "Crea filtros recomendados en 1 clic para priorizar seguimiento comercial.",
+    "wacrm-save-lead": "Guarda o actualiza el lead actual del chat. Requiere nombre y telefono valido.",
+    "wacrm-refresh": "Recarga datos del workspace: leads, templates, recordatorios y compliance.",
+    "wacrm-update-stage": "Actualiza la etapa del lead actual sin tocar otros campos.",
+    "wacrm-add-custom-stage": "Crea una etapa personalizada para tu pipeline.",
+    "wacrm-template": "Selecciona la plantilla a insertar en la caja de mensaje.",
+    "wacrm-insert-template": "Inserta la plantilla seleccionada en el chat; el envio final sigue siendo manual.",
+    "wacrm-insert-followup": "Inserta texto de seguimiento manual para el lead actual.",
+    "wacrm-note": "Escribe una nota interna del lead y luego guarda nota.",
+    "wacrm-save-note": "Guarda la nota en el historial del lead actual.",
+    "wacrm-reminder-date": "Define fecha y hora del recordatorio.",
+    "wacrm-reminder-note": "Escribe la accion que debes recordar.",
+    "wacrm-save-reminder": "Crea un recordatorio para el lead actual.",
+    "wacrm-followup-hours": "Horas para seguimiento rapido (1 a 720).",
+    "wacrm-quick-followup": "Crea recordatorio rapido usando el numero de horas indicado.",
+    "wacrm-copilot-reply": "Genera una sugerencia de respuesta y puedes insertarla en el chat.",
+    "wacrm-copilot-summary": "Resume el estado actual del lead para seguimiento comercial.",
+    "wacrm-copilot-next": "Sugiere la siguiente accion recomendada para avanzar el lead.",
+    "wacrm-copilot-output": "Salida editable del copiloto. Puedes ajustar antes de insertar.",
+    "wacrm-copilot-insert": "Inserta la salida del copiloto en el chat (envio manual).",
+    "wacrm-copilot-human": "Genera texto para derivar la conversacion a un humano.",
+    "wacrm-reset-tutorial": "Reinicia el checklist de tutorial para entrenamiento del equipo.",
+    "wacrm-toggle-blur": "Activa/desactiva blur visual para demos con privacidad.",
+    "wacrm-toggle": "Minimiza o expande el panel embebido.",
+    "wacrm-dock-toggle": "Abre/cierra el menu lateral rapido del CRM.",
+  };
+
+  const getElementHelpFromLabel = (element) => {
+    const labelEl = element.closest("label");
+    if (!(labelEl instanceof HTMLElement)) {
+      return "";
+    }
+    const span = labelEl.querySelector("span");
+    const base = String(span?.textContent || labelEl.textContent || "").replace(/\s+/g, " ").trim();
+    if (!base) {
+      return "";
+    }
+    if (element instanceof HTMLButtonElement) {
+      return `${base}. Haz clic para ejecutar esta accion de forma asistida.`;
+    }
+    return `${base}. Completa este dato y guarda para aplicar cambios.`;
+  };
+
+  const applyControlTooltips = () => {
+    const targets = [];
+    [state.nodes.root, state.nodes.dock, state.nodes.waTopBar, state.nodes.waComposerBar].forEach((node) => {
+      if (node instanceof HTMLElement) {
+        targets.push(...node.querySelectorAll("button, input, select, textarea"));
+      }
+    });
+
+    targets.forEach((node) => {
+      if (!(node instanceof HTMLElement)) {
+        return;
+      }
+      if (node.id === "wacrm-reminder-bell") {
+        return;
+      }
+
+      const quickAction = String(node.dataset?.wacrmAction || "").trim();
+      const dockTip = String(node.dataset?.tip || "").trim();
+      let tip = "";
+      if (quickAction) {
+        const base = getQuickActionHelpText(quickAction);
+        const guard = getQuickActionGuardMessage(quickAction);
+        tip = guard ? `${base} | ${guard}` : base;
+      } else if (dockTip) {
+        tip = dockTip;
+      } else if (node.id && PANEL_HELP_BY_ID[node.id]) {
+        tip = PANEL_HELP_BY_ID[node.id];
+      } else {
+        tip = getElementHelpFromLabel(node);
+      }
+
+      if (!tip) {
+        const text = String(node.textContent || "").replace(/\s+/g, " ").trim();
+        if (node instanceof HTMLButtonElement && text) {
+          tip = `${text}. Haz clic para ejecutar esta accion.`;
+        }
+      }
+
+      if (tip) {
+        node.setAttribute("title", tip);
+        if (node instanceof HTMLButtonElement && !node.getAttribute("aria-label")) {
+          const text = String(node.textContent || "").replace(/\s+/g, " ").trim();
+          if (text) {
+            node.setAttribute("aria-label", text);
+          }
+        }
+      }
+    });
   };
 
   const getLeadPrerequisiteHint = () => {
@@ -2371,6 +2788,7 @@
       setQuickBarButtonsState(composerBar, disabled);
     }
     renderDockContextualState();
+    applyControlTooltips();
   };
 
   const setActiveSection = (section) => {
@@ -2509,6 +2927,7 @@
       button.classList.toggle("is-blocked", Boolean(guardMessage));
       button.setAttribute("aria-disabled", guardMessage ? "true" : "false");
     });
+    applyControlTooltips();
   };
 
   const setModeState = () => {
@@ -2770,6 +3189,7 @@
       state.workspaceId = "";
       applyWorkspaceCustomStages();
       applyWorkspaceTemplateMode();
+      applyWorkspaceSegments();
       applyWorkspaceChatLeadBindings();
       state.subscription = null;
       state.canUseCrm = false;
@@ -2813,6 +3233,7 @@
     state.workspaceId = String(meData?.workspace?.id || meData?.user?.workspaceId || "").trim();
     applyWorkspaceCustomStages();
     applyWorkspaceTemplateMode();
+    applyWorkspaceSegments();
     applyWorkspaceChatLeadBindings();
     state.subscription = billingData.subscription || null;
     state.canUseCrm = Boolean(state.subscription?.canUseCrm);
@@ -3131,9 +3552,9 @@
       const row = document.createElement("div");
       row.className = "wacrm-stage-row";
       row.innerHTML = `
-        <button type="button" class="wacrm-stage-lead" data-reminder-open-lead="${String(lead?.id || "")}">
-          <span class="wacrm-hot-name">${String(lead?.name || "Lead").slice(0, 60)}</span>
-          <span class="wacrm-hot-meta">${dueLabel} | ${String(reminder?.note || "Sin nota").slice(0, 100)}</span>
+        <button type="button" class="wacrm-stage-lead" data-reminder-open-lead="${escapeHtml(String(lead?.id || ""))}">
+          <span class="wacrm-hot-name">${escapeHtml(String(lead?.name || "Lead").slice(0, 60))}</span>
+          <span class="wacrm-hot-meta">${escapeHtml(dueLabel)} | ${escapeHtml(String(reminder?.note || "Sin nota").slice(0, 100))}</span>
         </button>
       `;
 
@@ -3733,6 +4154,8 @@
               <h4>Tutorial rapido</h4>
               <p class="wacrm-meta" id="wacrm-tutorial-summary">Progreso tutorial: 0/6</p>
               <div class="wacrm-checklist" id="wacrm-tutorial-list"></div>
+              <p class="wacrm-meta">Guia completa de funciones WhatsWidget</p>
+              <div class="wacrm-guide-list" id="wacrm-tutorial-guide"></div>
               <div class="wacrm-actions">
                 <button type="button" class="wacrm-btn ghost" id="wacrm-reset-tutorial">Reiniciar tutorial</button>
               </div>
@@ -3761,6 +4184,11 @@
             <div class="wacrm-block" data-section="overview,lead">
               <h4>Contactos por etapa</h4>
               <div class="wacrm-chip-row" id="wacrm-stage-filters"></div>
+              <div class="wacrm-actions">
+                <button type="button" class="wacrm-btn ghost wacrm-btn-xs" id="wacrm-segment-seed">Cargar segmentos recomendados</button>
+              </div>
+              <div class="wacrm-chip-row" id="wacrm-segment-filters"></div>
+              <p class="wacrm-meta" id="wacrm-segment-filter-meta">Sin pestanas personalizadas. Crea una en popup > Pestanas personalizadas.</p>
               <p class="wacrm-meta" id="wacrm-stage-filter-meta">0 contacto(s) en todas.</p>
               <div class="wacrm-stage-list" id="wacrm-stage-leads"></div>
             </div>
@@ -3958,6 +4386,7 @@
     state.nodes.messagingModeMetaEl = root.querySelector("#wacrm-mode-meta");
     state.nodes.tutorialSummaryEl = root.querySelector("#wacrm-tutorial-summary");
     state.nodes.tutorialListEl = root.querySelector("#wacrm-tutorial-list");
+    state.nodes.tutorialGuideEl = root.querySelector("#wacrm-tutorial-guide");
     state.nodes.hotLeadsMetaEl = root.querySelector("#wacrm-hot-meta");
     state.nodes.hotLeadsEl = root.querySelector("#wacrm-hot-leads");
     state.nodes.inboxFiltersEl = root.querySelector("#wacrm-inbox-filters");
@@ -3967,6 +4396,9 @@
     state.nodes.productivityListEl = root.querySelector("#wacrm-productivity-list");
     state.nodes.crmBoardEl = root.querySelector("#wacrm-kanban-board");
     state.nodes.stageFiltersEl = root.querySelector("#wacrm-stage-filters");
+    state.nodes.segmentSeedBtn = root.querySelector("#wacrm-segment-seed");
+    state.nodes.segmentFiltersEl = root.querySelector("#wacrm-segment-filters");
+    state.nodes.segmentFilterMetaEl = root.querySelector("#wacrm-segment-filter-meta");
     state.nodes.stageFilterMetaEl = root.querySelector("#wacrm-stage-filter-meta");
     state.nodes.stageLeadsEl = root.querySelector("#wacrm-stage-leads");
     state.nodes.templateModeSelect = root.querySelector("#wacrm-template-mode");
@@ -4247,6 +4679,17 @@
       state.leadInboxView = view;
       void withSyncGuard(fetchWorkspaceData);
     });
+    state.nodes.segmentSeedBtn?.addEventListener("click", () => {
+      const { merged, added } = mergeRecommendedSegments(state.segments);
+      state.segments = merged;
+      if (!state.segments.some((segment) => segment.id === state.activeSegmentId)) {
+        state.activeSegmentId = "all";
+      }
+      void persistSegments();
+      renderStageFilters();
+      renderStageLeads();
+      setStatus(`Segmentos recomendados cargados: +${added}.`, false, { toast: true });
+    });
     state.nodes.customStageInput?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -4267,11 +4710,14 @@
     state.panelPosition = normalizePanelPosition(values[PANEL_POSITION_KEY]);
     state.customStageStore = normalizeCustomStageStore(values[CUSTOM_STAGES_KEY]);
     state.templateModeStore = normalizeTemplateModeStore(values[TEMPLATE_MODE_KEY]);
+    state.segmentsStore = normalizeSegmentsStore(values[SEGMENTS_STORAGE_KEY]);
+    state.activeSegmentId = String(values[ACTIVE_SEGMENT_STORAGE_KEY] || "all").trim() || "all";
     state.chatLeadBindingsStore = normalizeChatLeadBindingsStore(values[CHAT_LEAD_BINDINGS_KEY]);
     state.reminderAlertSignal = normalizeReminderAlertSignal(values[REMINDER_ALERT_SIGNAL_KEY]);
     state.blurMode = Boolean(values[BLUR_MODE_KEY]);
     applyWorkspaceCustomStages();
     applyWorkspaceTemplateMode();
+    applyWorkspaceSegments();
     applyWorkspaceChatLeadBindings();
     renderTutorial();
     renderCustomStageMeta();
@@ -4319,6 +4765,17 @@
             applyWorkspaceCustomStages();
             renderCustomStageMeta();
             renderStageShortcuts();
+            renderStageFilters();
+            renderStageLeads();
+          }
+          if (changes[SEGMENTS_STORAGE_KEY]) {
+            state.segmentsStore = normalizeSegmentsStore(changes[SEGMENTS_STORAGE_KEY].newValue);
+            applyWorkspaceSegments();
+            renderStageFilters();
+            renderStageLeads();
+          }
+          if (changes[ACTIVE_SEGMENT_STORAGE_KEY]) {
+            state.activeSegmentId = String(changes[ACTIVE_SEGMENT_STORAGE_KEY].newValue || "all").trim() || "all";
             renderStageFilters();
             renderStageLeads();
           }
@@ -4425,7 +4882,6 @@
 
   const init = async () => {
     createPanel();
-    createDock();
     positionPanel();
     setActiveSection(state.activeSection);
     await syncConfigFromStorage();

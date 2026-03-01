@@ -472,6 +472,12 @@ html.wacrm-blur-mode #wacrm-dock {
   gap: 5px;
 }
 
+.wacrm-segment-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .wacrm-chip {
   border: 1px solid #cfe0cf;
   border-radius: 999px;
@@ -496,6 +502,19 @@ html.wacrm-blur-mode #wacrm-dock {
   background: #dbf0dd;
   border-color: #8fc79a;
   color: #204524;
+}
+
+.wacrm-segment-remove {
+  min-width: 22px;
+  padding: 5px 7px;
+  background: #fdf0f0;
+  border-color: #e6c3c3;
+  color: #842d2d;
+  font-weight: 700;
+}
+
+.wacrm-segment-remove:hover {
+  background: #f8e0e0;
 }
 
 .wacrm-checklist {
@@ -530,6 +549,34 @@ html.wacrm-blur-mode #wacrm-dock {
   font-size: 10px;
   color: #5a715d;
   line-height: 1.2;
+}
+
+.wacrm-guide-list {
+  display: grid;
+  gap: 6px;
+  max-height: 210px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.wacrm-guide-row {
+  border: 1px solid #dce6ef;
+  border-radius: 9px;
+  background: #f8fbff;
+  padding: 6px 7px;
+  display: grid;
+  gap: 2px;
+}
+
+.wacrm-guide-row strong {
+  font-size: 11px;
+  color: #1f3d5c;
+}
+
+.wacrm-guide-row small {
+  font-size: 10px;
+  color: #4f6780;
+  line-height: 1.25;
 }
 
 .wacrm-hot-list {
