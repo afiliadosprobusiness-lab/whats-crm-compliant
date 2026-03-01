@@ -831,10 +831,21 @@
   };
 
   const getComposerEl = () => {
-    return (
-      document.querySelector("footer [contenteditable='true'][role='textbox']") ||
-      document.querySelector("footer div[contenteditable='true']")
-    );
+    const selectors = [
+      "footer [contenteditable='true'][role='textbox']",
+      "footer div[contenteditable='true']",
+      "#main [data-testid='conversation-compose-box-input'] [contenteditable='true']",
+      "#main [contenteditable='true'][data-tab]",
+      "#main [role='textbox'][contenteditable='true']",
+    ];
+
+    for (const selector of selectors) {
+      const match = document.querySelector(selector);
+      if (match instanceof HTMLElement) {
+        return match;
+      }
+    }
+    return null;
   };
 
   const getConversationHeaderEl = () => {
@@ -845,12 +856,22 @@
     );
   };
 
-  const getConversationFooterEl = () => {
-    return (
-      document.querySelector("#main footer") ||
-      document.querySelector("footer") ||
-      null
-    );
+  const getComposerHostEl = () => {
+    const composer = getComposerEl();
+    if (!(composer instanceof HTMLElement)) {
+      return null;
+    }
+
+    const footer = composer.closest("#main footer");
+    if (footer instanceof HTMLElement) {
+      return footer;
+    }
+
+    const rowHost =
+      composer.closest("[data-testid='conversation-compose-box-input']") ||
+      composer.closest("[role='application']") ||
+      composer.parentElement;
+    return rowHost instanceof HTMLElement ? rowHost : null;
   };
 
   const getWhatsAppLoggedIn = () => {
@@ -1629,11 +1650,12 @@
 
   const getQuickLeadLabel = () => {
     if (state.currentLead) {
-      const owner = getOwnerLabel(state.currentLead.ownerUserId);
-      return `${state.currentLead.name || "Lead"} | ${getLeadPipelineLabel(state.currentLead)} | owner: ${owner}`;
+      const leadName = String(state.currentLead.name || "Lead").trim().slice(0, 28);
+      const stageLabel = getLeadPipelineLabel(state.currentLead);
+      return `${leadName} · ${stageLabel}`;
     }
     if (state.currentChat?.name) {
-      return `${state.currentChat.name} | sin lead guardado`;
+      return `${String(state.currentChat.name || "Chat").trim().slice(0, 28)} · sin lead`;
     }
     return "Sin conversacion activa";
   };
@@ -1785,8 +1807,8 @@
   };
 
   const ensureComposerQuickBar = () => {
-    const footer = getConversationFooterEl();
-    if (!(footer instanceof HTMLElement) || !(footer.parentElement instanceof HTMLElement)) {
+    const host = getComposerHostEl();
+    if (!(host instanceof HTMLElement)) {
       state.nodes.waComposerBar?.remove();
       state.nodes.waComposerBar = null;
       return null;
@@ -1812,7 +1834,19 @@
       state.nodes.waComposerBar = bar;
     }
 
-    footer.insertAdjacentElement("beforebegin", bar);
+    if (host.matches("footer")) {
+      if (host.firstElementChild !== bar) {
+        host.prepend(bar);
+      }
+    } else if (host.parentElement instanceof HTMLElement) {
+      if (host.previousElementSibling !== bar || bar.parentElement !== host.parentElement) {
+        host.parentElement.insertBefore(bar, host);
+      }
+    } else {
+      bar.remove();
+      state.nodes.waComposerBar = null;
+      return null;
+    }
     return bar;
   };
 
@@ -2736,13 +2770,13 @@
     dock.innerHTML = `
       <button type="button" class="wacrm-dock-toggle" id="wacrm-dock-toggle" title="Abrir menu CRM">CRM</button>
       <div class="wacrm-dock-menu" id="wacrm-dock-menu">
-        <button type="button" class="wacrm-dock-item active" data-action="overview" data-section="overview" title="Inicio y leads calientes">H</button>
-        <button type="button" class="wacrm-dock-item" data-action="save-lead" data-section="lead" title="Guardar lead del chat actual">L</button>
-        <button type="button" class="wacrm-dock-item" data-action="insert-template" data-section="actions" title="Insertar plantilla seleccionada">A</button>
-        <button type="button" class="wacrm-dock-item" data-action="quick-followup" data-section="actions" title="Crear seguimiento rapido (24h)">S</button>
-        <button type="button" class="wacrm-dock-item" data-action="crm" data-section="crm" title="Vista CRM Kanban">K</button>
-        <button type="button" class="wacrm-dock-item" data-action="tutorial" data-section="tutorial" title="Tutorial">T</button>
-        <button type="button" class="wacrm-dock-item" data-action="all" data-section="all" title="Ver todo el panel">+</button>
+        <button type="button" class="wacrm-dock-item active" data-action="overview" data-section="overview" title="Inicio y leads calientes">Inicio</button>
+        <button type="button" class="wacrm-dock-item" data-action="save-lead" data-section="lead" title="Guardar lead del chat actual">Guardar</button>
+        <button type="button" class="wacrm-dock-item" data-action="insert-template" data-section="actions" title="Insertar plantilla seleccionada">Plantilla</button>
+        <button type="button" class="wacrm-dock-item" data-action="quick-followup" data-section="actions" title="Crear seguimiento rapido (24h)">Seguir</button>
+        <button type="button" class="wacrm-dock-item" data-action="crm" data-section="crm" title="Vista CRM Kanban">Kanban</button>
+        <button type="button" class="wacrm-dock-item" data-action="tutorial" data-section="tutorial" title="Tutorial">Guia</button>
+        <button type="button" class="wacrm-dock-item" data-action="all" data-section="all" title="Ver todo el panel">Todo</button>
       </div>
     `;
     document.body.appendChild(dock);
