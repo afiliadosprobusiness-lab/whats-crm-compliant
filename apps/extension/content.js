@@ -877,16 +877,20 @@
       return null;
     }
 
-    const footer = composer.closest("#main footer");
-    if (footer instanceof HTMLElement) {
-      return footer;
-    }
-
     const rowHost =
       composer.closest("[data-testid='conversation-compose-box-input']") ||
-      composer.closest("[role='application']") ||
+      composer.closest("footer > div") ||
       composer.parentElement;
     return rowHost instanceof HTMLElement ? rowHost : null;
+  };
+
+  const getComposerFooterEl = () => {
+    const composer = getComposerEl();
+    if (!(composer instanceof HTMLElement)) {
+      return null;
+    }
+    const footer = composer.closest("#main footer");
+    return footer instanceof HTMLElement ? footer : null;
   };
 
   const getWhatsAppLoggedIn = () => {
@@ -1885,7 +1889,8 @@
   };
 
   const ensureTopQuickBar = () => {
-    const host = getComposerHostEl();
+    const footer = getComposerFooterEl();
+    const host = footer || getComposerHostEl();
     if (!(host instanceof HTMLElement)) {
       state.nodes.waTopBar?.remove();
       state.nodes.waTopBar = null;
@@ -1918,12 +1923,7 @@
 
     if (host.parentElement instanceof HTMLElement) {
       const parent = host.parentElement;
-      const composerBar = state.nodes.waComposerBar;
-      if (composerBar instanceof HTMLElement && composerBar.parentElement === parent) {
-        if (bar.parentElement !== parent || bar.nextElementSibling !== composerBar) {
-          parent.insertBefore(bar, composerBar);
-        }
-      } else if (host.previousElementSibling !== bar || bar.parentElement !== parent) {
+      if (host.previousElementSibling !== bar || bar.parentElement !== parent) {
         parent.insertBefore(bar, host);
       }
     } else {
@@ -1935,8 +1935,9 @@
   };
 
   const ensureComposerQuickBar = () => {
+    const footer = getComposerFooterEl();
     const host = getComposerHostEl();
-    if (!(host instanceof HTMLElement)) {
+    if (!(footer instanceof HTMLElement) && !(host instanceof HTMLElement)) {
       state.nodes.waComposerBar?.remove();
       state.nodes.waComposerBar = null;
       return null;
@@ -1963,9 +1964,14 @@
       state.nodes.waComposerBar = bar;
     }
 
-    if (host.parentElement instanceof HTMLElement) {
-      if (host.previousElementSibling !== bar || bar.parentElement !== host.parentElement) {
-        host.parentElement.insertBefore(bar, host);
+    if (footer instanceof HTMLElement) {
+      if (bar.parentElement !== footer || footer.lastElementChild !== bar) {
+        footer.appendChild(bar);
+      }
+    } else if (host instanceof HTMLElement && host.parentElement instanceof HTMLElement) {
+      const parent = host.parentElement;
+      if (host.nextElementSibling !== bar || bar.parentElement !== parent) {
+        parent.insertBefore(bar, host.nextSibling);
       }
     } else {
       bar.remove();
