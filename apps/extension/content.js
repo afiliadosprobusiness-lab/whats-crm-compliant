@@ -3087,6 +3087,70 @@
     setStatus("Plantilla insertada. Revisa y envia manualmente.");
   };
 
+  const closePhoneCaptureModal = (options = {}) => {
+    const overlay = state.nodes.phoneModalOverlay;
+    if (!(overlay instanceof HTMLElement)) {
+      return;
+    }
+    overlay.classList.add("wacrm-hidden");
+    overlay.setAttribute("aria-hidden", "true");
+    if (options.focusPhoneInput && state.nodes.phoneInput) {
+      state.nodes.phoneInput.focus();
+    }
+  };
+
+  const openPhoneCaptureModal = () => {
+    const overlay = state.nodes.phoneModalOverlay;
+    const input = state.nodes.phoneModalInput;
+    const leadNameEl = state.nodes.phoneModalLeadName;
+    const helperEl = state.nodes.phoneModalHelper;
+    if (!(overlay instanceof HTMLElement) || !(input instanceof HTMLInputElement)) {
+      return false;
+    }
+
+    const chatName = String(state.currentChat?.name || state.nodes.nameInput?.value || "este contacto").trim();
+    const guessedPhone = guessPhoneForCurrentChat();
+    input.value = guessedPhone || normalizePhone(state.nodes.phoneInput?.value || "");
+    if (leadNameEl instanceof HTMLElement) {
+      leadNameEl.textContent = chatName || "este contacto";
+    }
+    if (helperEl instanceof HTMLElement) {
+      helperEl.textContent = "Pega el numero con codigo pais. Ej: +51999999999";
+      helperEl.classList.remove("error");
+    }
+    overlay.classList.remove("wacrm-hidden");
+    overlay.setAttribute("aria-hidden", "false");
+    window.requestAnimationFrame(() => {
+      input.focus();
+      input.select();
+    });
+    return true;
+  };
+
+  const applyPhoneFromModalAndSave = () => {
+    const input = state.nodes.phoneModalInput;
+    const helperEl = state.nodes.phoneModalHelper;
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    const normalized = normalizePhone(input.value || "");
+    if (!isLikelyPhone(normalized)) {
+      if (helperEl instanceof HTMLElement) {
+        helperEl.textContent = "Numero invalido. Usa formato E.164: +519...";
+        helperEl.classList.add("error");
+      }
+      input.focus();
+      return;
+    }
+
+    if (state.nodes.phoneInput) {
+      state.nodes.phoneInput.value = normalized;
+    }
+    closePhoneCaptureModal({ focusPhoneInput: false });
+    setStatus("Numero actualizado. Guardando lead...");
+    void withSyncGuard(saveLead);
+  };
+
   const saveLead = async () => {
     let phone = normalizePhone(state.nodes.phoneInput?.value || "");
     let name = String(state.nodes.nameInput?.value || "").trim();
@@ -3114,10 +3178,12 @@
     }
 
     if (!phone) {
-      setStatus(
-        "No pude detectar telefono automaticamente. Pega el numero E.164 (+519...) y vuelve a guardar.",
-        true,
-      );
+      const opened = openPhoneCaptureModal();
+      if (opened) {
+        setStatus("No pude detectar telefono automaticamente. Usa el mini modal para pegar numero y guardar.");
+        return;
+      }
+      setStatus("No pude detectar telefono automaticamente. Pega el numero E.164 (+519...) y vuelve a guardar.", true);
       return;
     }
 
@@ -3371,7 +3437,7 @@
           </div>
         </div>
         <div class="wacrm-body" id="wacrm-body">
-          <p class="wacrm-status" id="wacrm-status">Inicializando CRM...</p>
+          <p class="wacrm-status" id="wacrm-status" role="status" aria-live="polite">Inicializando CRM...</p>
           <div class="wacrm-tabs" id="wacrm-tabs">
             <button type="button" class="wacrm-tab active" data-section="overview">Inicio</button>
             <button type="button" class="wacrm-tab" data-section="lead">Leads</button>
@@ -3569,6 +3635,20 @@
             </div>
           </div>
         </div>
+        <div class="wacrm-phone-modal-overlay wacrm-hidden" id="wacrm-phone-modal-overlay" aria-hidden="true">
+          <div class="wacrm-phone-modal" id="wacrm-phone-modal" role="dialog" aria-modal="true" aria-labelledby="wacrm-phone-modal-title">
+            <h4 id="wacrm-phone-modal-title">Pegar numero y guardar</h4>
+            <p class="wacrm-meta">No pude detectar el telefono de <strong id="wacrm-phone-modal-lead-name">este contacto</strong>.</p>
+            <label class="wacrm-label">Telefono E.164
+              <input class="wacrm-input" id="wacrm-phone-modal-input" placeholder="+51999999999" />
+            </label>
+            <p class="wacrm-meta" id="wacrm-phone-modal-helper">Pega el numero con codigo pais. Ej: +51999999999</p>
+            <div class="wacrm-actions">
+              <button type="button" class="wacrm-btn" id="wacrm-phone-modal-save">Pegar numero y guardar</button>
+              <button type="button" class="wacrm-btn ghost" id="wacrm-phone-modal-cancel">Cancelar</button>
+            </div>
+          </div>
+        </div>
       </div>
     `;
 
@@ -3634,6 +3714,10 @@
     state.nodes.reminderBtn = root.querySelector("#wacrm-save-reminder");
     state.nodes.blurBtn = root.querySelector("#wacrm-toggle-blur");
     state.nodes.copilotOutput = root.querySelector("#wacrm-copilot-output");
+    state.nodes.phoneModalOverlay = root.querySelector("#wacrm-phone-modal-overlay");
+    state.nodes.phoneModalInput = root.querySelector("#wacrm-phone-modal-input");
+    state.nodes.phoneModalLeadName = root.querySelector("#wacrm-phone-modal-lead-name");
+    state.nodes.phoneModalHelper = root.querySelector("#wacrm-phone-modal-helper");
 
     populateSelect(
       state.nodes.stageSelect,
@@ -3734,6 +3818,32 @@
     });
     root.querySelector("#wacrm-reset-tutorial").addEventListener("click", () => {
       void resetTutorial();
+    });
+    root.querySelector("#wacrm-phone-modal-save").addEventListener("click", () => {
+      applyPhoneFromModalAndSave();
+    });
+    root.querySelector("#wacrm-phone-modal-cancel").addEventListener("click", () => {
+      closePhoneCaptureModal({ focusPhoneInput: true });
+    });
+    state.nodes.phoneModalOverlay?.addEventListener("click", (event) => {
+      if (event.target === state.nodes.phoneModalOverlay) {
+        closePhoneCaptureModal({ focusPhoneInput: true });
+      }
+    });
+    state.nodes.phoneModalOverlay?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePhoneCaptureModal({ focusPhoneInput: true });
+      }
+    });
+    state.nodes.phoneModalInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyPhoneFromModalAndSave();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        closePhoneCaptureModal({ focusPhoneInput: true });
+      }
     });
 
     state.nodes.phoneInput.addEventListener("input", () => {

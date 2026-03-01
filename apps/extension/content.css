@@ -89,6 +89,39 @@ html.wacrm-blur-mode #wacrm-dock {
   display: none !important;
 }
 
+.wacrm-phone-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(5 12 20 / 48%);
+  backdrop-filter: blur(3px);
+}
+
+.wacrm-phone-modal {
+  width: min(360px, calc(100vw - 28px));
+  border: 1px solid rgb(255 255 255 / 46%);
+  border-radius: 16px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  background: linear-gradient(170deg, rgb(255 255 255 / 95%), rgb(240 248 255 / 92%));
+  box-shadow:
+    0 20px 34px rgb(0 0 0 / 30%),
+    inset 0 1px 0 rgb(255 255 255 / 75%);
+}
+
+.wacrm-phone-modal h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+#wacrm-phone-modal-helper.error {
+  color: #b32020;
+}
+
 .wacrm-wa-bar {
   margin: 6px 8px 4px;
   border: 1px solid rgb(138 187 232 / 72%);
