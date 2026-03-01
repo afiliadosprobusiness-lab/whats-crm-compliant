@@ -60,7 +60,7 @@ Proyecto: `whatsapp-crm-compliant`
 
 - Popup unico con:
   - Marca de extension: `WhatsWidget` (by LeadWidget), con icono de LeadWidget en `apps/extension/icon.png`.
-  - `BACKEND_URL` configurable desde popup (persistido en `crm_backend_url`) con fallback seguro a backend productivo.
+  - `BACKEND_URL` gestionado en segundo plano (persistido en `crm_backend_url`) con fallback seguro a backend productivo; campo oculto en UI de usuario final para evitar configuraciones incorrectas.
   - Login/registro owner.
   - Panel embebido en `web.whatsapp.com` via content script (lead rapido, notas, recordatorios, insertar plantilla).
   - Panel embebido con selector de plantilla operativa por workspace (`General` o `Inmobiliaria`):

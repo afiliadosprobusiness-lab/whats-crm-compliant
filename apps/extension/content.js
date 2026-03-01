@@ -188,6 +188,14 @@
     leadInbox: null,
     leadInboxView: "my",
     productivity: null,
+    apiCapabilities: {
+      complianceTrustCenter: true,
+      complianceMessagingMode: true,
+      leadsInbox: true,
+      analyticsProductivity: true,
+      authUsers: true,
+      complianceManualAssist: true,
+    },
     currentLead: null,
     currentChat: null,
     activeSection: "overview",
@@ -272,10 +280,44 @@
     });
 
     if (!response.ok) {
-      throw new Error(await parseApiError(response));
+      const error = new Error(await parseApiError(response));
+      error.statusCode = response.status;
+      throw error;
     }
 
     return response.json().catch(() => ({}));
+  };
+
+  const isEndpointMissingError = (error) => {
+    const status = Number(error?.statusCode || 0);
+    return status === 404 || status === 405;
+  };
+
+  const optionalApiRequest = async (capabilityKey, path, fallbackValue, options = {}) => {
+    if (state.apiCapabilities[capabilityKey] === false) {
+      return fallbackValue;
+    }
+
+    try {
+      return await apiRequest(path, options);
+    } catch (error) {
+      if (isEndpointMissingError(error)) {
+        state.apiCapabilities[capabilityKey] = false;
+        return fallbackValue;
+      }
+      throw error;
+    }
+  };
+
+  const resetApiCapabilities = () => {
+    state.apiCapabilities = {
+      complianceTrustCenter: true,
+      complianceMessagingMode: true,
+      leadsInbox: true,
+      analyticsProductivity: true,
+      authUsers: true,
+      complianceManualAssist: true,
+    };
   };
 
   const normalizeApiBaseUrl = (input) => {
@@ -1881,6 +1923,7 @@
 
   const fetchWorkspaceData = async () => {
     if (!state.token) {
+      resetApiCapabilities();
       state.me = null;
       state.workspaceId = "";
       applyWorkspaceCustomStages();
@@ -1971,11 +2014,11 @@
       apiRequest("/templates"),
       apiRequest("/leads"),
       apiRequest("/reminders"),
-      apiRequest("/compliance/trust-center"),
-      apiRequest("/auth/users"),
-      apiRequest(`/leads/inbox?view=${encodeURIComponent(safeView)}`),
-      apiRequest("/analytics/productivity"),
-      apiRequest("/compliance/messaging-mode"),
+      optionalApiRequest("complianceTrustCenter", "/compliance/trust-center", { trustCenter: null }),
+      optionalApiRequest("authUsers", "/auth/users", { users: [] }),
+      optionalApiRequest("leadsInbox", `/leads/inbox?view=${encodeURIComponent(safeView)}`, { inbox: null }),
+      optionalApiRequest("analyticsProductivity", "/analytics/productivity", { productivity: null }),
+      optionalApiRequest("complianceMessagingMode", "/compliance/messaging-mode", { mode: null }),
     ]);
     state.templates = templatesData.templates || [];
     state.leads = leadsData.leads || [];
@@ -2083,10 +2126,15 @@
       action,
       context: String(context || "").trim().slice(0, 80),
     };
-    return apiRequest("/compliance/manual-assist", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    return optionalApiRequest(
+      "complianceManualAssist",
+      "/compliance/manual-assist",
+      { usage: null },
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    );
   };
 
   const runCopilot = async (mode) => {
@@ -2861,6 +2909,7 @@
     const values = await storageGet(STORAGE_KEYS);
     state.apiBaseUrl = normalizeApiBaseUrl(values[BACKEND_URL_STORAGE_KEY] || values.crm_api_base_url || "");
     state.token = String(values.crm_token || "").trim();
+    resetApiCapabilities();
     state.tutorialProgress = normalizeTutorialProgress(values[TUTORIAL_PROGRESS_KEY]);
     state.panelPosition = normalizePanelPosition(values[PANEL_POSITION_KEY]);
     state.customStageStore = normalizeCustomStageStore(values[CUSTOM_STAGES_KEY]);
@@ -2897,10 +2946,12 @@
               ? changes[BACKEND_URL_STORAGE_KEY].newValue
               : changes.crm_api_base_url?.newValue;
             state.apiBaseUrl = normalizeApiBaseUrl(backendUrlRaw || "");
+            resetApiCapabilities();
             mustReload = true;
           }
           if (changes.crm_token) {
             state.token = String(changes.crm_token.newValue || "").trim();
+            resetApiCapabilities();
             mustReload = true;
           }
           if (changes[PANEL_POSITION_KEY]) {

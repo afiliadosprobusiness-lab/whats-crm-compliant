@@ -227,6 +227,13 @@ const state = {
   segmentsStore: {},
   segments: [],
   activeSegmentId: "all",
+  apiCapabilities: {
+    complianceTrustCenter: true,
+    complianceMessagingMode: true,
+    leadsInbox: true,
+    analyticsProductivity: true,
+    authUsers: true,
+  },
 };
 
 const crmSections = Array.from(document.querySelectorAll("[data-crm]"));
@@ -406,6 +413,16 @@ const setCrmVisibility = (visible) => {
   });
 };
 
+const resetApiCapabilities = () => {
+  state.apiCapabilities = {
+    complianceTrustCenter: true,
+    complianceMessagingMode: true,
+    leadsInbox: true,
+    analyticsProductivity: true,
+    authUsers: true,
+  };
+};
+
 const persistToken = (token) => {
   state.token = token;
   if (token) {
@@ -444,6 +461,27 @@ const apiRequest = async (path, options = {}) => {
   }
 
   return payload;
+};
+
+const isEndpointMissingError = (error) => {
+  const status = Number(error?.statusCode || 0);
+  return status === 404 || status === 405;
+};
+
+const optionalApiRequest = async (capabilityKey, path, fallbackValue) => {
+  if (state.apiCapabilities[capabilityKey] === false) {
+    return fallbackValue;
+  }
+
+  try {
+    return await apiRequest(path);
+  } catch (error) {
+    if (isEndpointMissingError(error)) {
+      state.apiCapabilities[capabilityKey] = false;
+      return fallbackValue;
+    }
+    throw error;
+  }
 };
 
 const renderSession = () => {
@@ -1189,33 +1227,29 @@ const refreshSubscription = async () => {
 
 const fetchLeadInbox = async (view = state.leadInboxView) => {
   const safeView = inboxViews.includes(view) ? view : "my";
-  const response = await apiRequest(`/leads/inbox?view=${encodeURIComponent(safeView)}`);
+  const response = await optionalApiRequest(
+    "leadsInbox",
+    `/leads/inbox?view=${encodeURIComponent(safeView)}`,
+    { inbox: null },
+  );
   state.leadInboxView = safeView;
   state.leadInbox = response.inbox || null;
 };
 
 const refreshData = async () => {
   const safeView = inboxViews.includes(state.leadInboxView) ? state.leadInboxView : "my";
-  const [
-    leadsData,
-    templatesData,
-    campaignsData,
-    remindersData,
-    complianceData,
-    usersData,
-    inboxData,
-    analyticsData,
-    modeData,
-  ] = await Promise.all([
+  const [leadsData, templatesData, campaignsData, remindersData] = await Promise.all([
     apiRequest("/leads"),
     apiRequest("/templates"),
     apiRequest("/campaigns"),
     apiRequest("/reminders"),
-    apiRequest("/compliance/trust-center"),
-    apiRequest("/auth/users"),
-    apiRequest(`/leads/inbox?view=${encodeURIComponent(safeView)}`),
-    apiRequest("/analytics/productivity"),
-    apiRequest("/compliance/messaging-mode"),
+  ]);
+  const [complianceData, usersData, inboxData, analyticsData, modeData] = await Promise.all([
+    optionalApiRequest("complianceTrustCenter", "/compliance/trust-center", { trustCenter: null }),
+    optionalApiRequest("authUsers", "/auth/users", { users: [] }),
+    optionalApiRequest("leadsInbox", `/leads/inbox?view=${encodeURIComponent(safeView)}`, { inbox: null }),
+    optionalApiRequest("analyticsProductivity", "/analytics/productivity", { productivity: null }),
+    optionalApiRequest("complianceMessagingMode", "/compliance/messaging-mode", { mode: null }),
   ]);
 
   state.leads = leadsData.leads || [];
@@ -1245,6 +1279,7 @@ const refreshData = async () => {
 };
 
 const bootstrapAuthenticated = async () => {
+  resetApiCapabilities();
   const me = await apiRequest("/auth/me");
   state.authUser = me.user;
   state.workspace = me.workspace;
@@ -1256,8 +1291,15 @@ const bootstrapAuthenticated = async () => {
   setCrmVisibility(canUseCrm);
 
   if (canUseCrm) {
-    await refreshData();
-    setFeedback(tr("session_active", "Sesion activa y CRM habilitado."));
+    try {
+      await refreshData();
+      setFeedback(tr("session_active", "Sesion activa y CRM habilitado."));
+    } catch (error) {
+      setFeedback(
+        `Sesion activa, pero algunos modulos no pudieron cargarse: ${error.message}`,
+        true,
+      );
+    }
   } else {
     state.trustCenter = null;
     state.messagingMode = null;
@@ -1274,6 +1316,7 @@ const bootstrapAuthenticated = async () => {
 };
 
 const resetState = () => {
+  resetApiCapabilities();
   persistToken("");
   state.authUser = null;
   state.workspace = null;
@@ -1842,8 +1885,13 @@ const bootstrap = async () => {
   try {
     await bootstrapAuthenticated();
   } catch (error) {
-    resetState();
-    setFeedback(`${tr("session_invalid", "Sesion invalida:")} ${error.message}`, true);
+    const statusCode = Number(error?.statusCode || 0);
+    if (statusCode === 401 || statusCode === 403) {
+      resetState();
+      setFeedback(`${tr("session_invalid", "Sesion invalida:")} ${error.message}`, true);
+      return;
+    }
+    setFeedback(`No se pudo completar la carga inicial: ${error.message}`, true);
   }
 };
 
