@@ -75,7 +75,8 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido con UX modular: dock lateral + tabs, tutorial con checklist persistente y vista de leads calientes del dia.
   - Dock lateral con atajos operativos en esquema de 2 niveles (primarios compactos tipo icono + secundarios en `Mas`) y tooltips contextuales para reducir sobrecarga visual.
   - Panel embebido arrastrable; doble clic en la barra superior reinicia posicion automatica.
-  - Cabecera del panel embebido agrega campana de recordatorios vencidos con badge rojo, mini aviso emergente y centro de avisos con acciones rapidas (`Abrir chat`, `Completar`).
+  - Cabecera del panel embebido agrega campana de recordatorios vencidos con badge rojo, mini aviso emergente, sonido de alerta y centro de avisos con acciones rapidas (`Abrir chat`, `Completar`).
+  - Popup y panel embebido refuerzan confirmaciones de acciones (guardado/actualizacion/error) con feedback visual explicito para reducir incertidumbre operativa.
   - Panel embebido agrega barra de estado/atajos junto al input (debajo del composer) con estado vivo de lead/compliance/modo y acciones (`Guardar`, `Resumen`, `CRM`) con paleta visual activa.
   - Panel embebido agrega barra de acciones sobre la caja de mensaje con atajos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos con colores de estado, manteniendo envio manual.
   - Panel embebido asocia automaticamente chat -> lead priorizando telefono y memoria de contexto por workspace (fallback por nombre unico), autocompleta telefono al guardar leads nuevos cuando el chat expone numero y abre mini modal de captura ("Pegar numero y guardar") cuando no se detecta telefono.

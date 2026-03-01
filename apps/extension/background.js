@@ -3,6 +3,7 @@ const BACKEND_URL_STORAGE_KEY = "crm_backend_url";
 const REMINDER_ALARM_NAME = "wacrm_reminder_check_v1";
 const REMINDER_ALARM_PERIOD_MINUTES = 1;
 const NOTIFIED_REMINDERS_KEY = "crm_notified_reminders_v1";
+const REMINDER_ALERT_SIGNAL_KEY = "crm_reminder_alert_signal_v1";
 const NOTIFIED_RETENTION_DAYS = 14;
 const MAX_NOTIFIED_REMINDERS = 1200;
 
@@ -171,6 +172,7 @@ const checkDueReminders = async () => {
       })
       .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
 
+    let newDueCount = 0;
     for (const reminder of dueReminders) {
       const reminderKey = toReminderKey(workspaceId, reminder);
       if (normalizedCache[reminderKey]) {
@@ -193,6 +195,17 @@ const checkDueReminders = async () => {
 
       normalizedCache[reminderKey] = new Date().toISOString();
       cacheChanged = true;
+      newDueCount += 1;
+    }
+
+    if (newDueCount > 0) {
+      await storageSet({
+        [REMINDER_ALERT_SIGNAL_KEY]: {
+          at: new Date().toISOString(),
+          workspaceId,
+          newDueCount,
+        },
+      });
     }
 
     const finalCache = normalizeNotifiedReminders(normalizedCache);
@@ -234,6 +247,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 chrome.notifications.onClicked.addListener((notificationId) => {
   if (String(notificationId || "").startsWith("wacrm_rem_")) {
+    void storageSet({
+      [REMINDER_ALERT_SIGNAL_KEY]: {
+        at: new Date().toISOString(),
+        source: "notification_click",
+      },
+    });
     chrome.tabs.create({ url: "https://web.whatsapp.com" });
   }
 });

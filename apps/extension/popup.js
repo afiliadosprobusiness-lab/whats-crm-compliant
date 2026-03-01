@@ -406,8 +406,14 @@ const tr = (key, fallback) => {
 };
 
 const setFeedback = (text, isError = false) => {
-  feedbackEl.textContent = text;
-  feedbackEl.className = isError ? "error" : "";
+  const message = String(text || "").trim();
+  if (!message) {
+    feedbackEl.textContent = "";
+    feedbackEl.className = "";
+    return;
+  }
+  feedbackEl.textContent = isError ? `Error: ${message}` : `Listo: ${message}`;
+  feedbackEl.className = isError ? "error" : "success";
 };
 
 const setCrmVisibility = (visible) => {

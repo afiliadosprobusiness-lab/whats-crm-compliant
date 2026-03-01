@@ -19,6 +19,7 @@
     "crm_blur_mode_v1",
     "crm_template_mode_v1",
     "crm_chat_lead_bindings_v1",
+    "crm_reminder_alert_signal_v1",
   ];
   const FOLLOWUP_USAGE_KEY = "crm_followup_usage_v1";
   const FOLLOWUP_DAILY_LIMIT = 20;
@@ -42,6 +43,7 @@
   const WA_TOP_BAR_ID = "wacrm-wa-topbar";
   const WA_COMPOSER_BAR_ID = "wacrm-wa-composerbar";
   const WORKSPACE_REFRESH_SIGNAL_KEY = "crm_workspace_refresh_tick";
+  const REMINDER_ALERT_SIGNAL_KEY = "crm_reminder_alert_signal_v1";
   const VIEW_REFRESH_TICK_MS = 2500;
   const WORKSPACE_AUTOSYNC_ACTIVE_MS = 12000;
   const WORKSPACE_AUTOSYNC_IDLE_MS = 30000;
@@ -240,6 +242,8 @@
     chatLeadBindings: {},
     overdueReminderSignature: "",
     dismissedReminderSignature: "",
+    reminderAlertSignal: null,
+    lastReminderSoundAt: 0,
     nodes: {},
   };
 
@@ -841,6 +845,23 @@
     return normalized;
   };
 
+  const normalizeReminderAlertSignal = (value) => {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    const atRaw = String(value.at || "").trim();
+    const atTime = new Date(atRaw).getTime();
+    if (Number.isNaN(atTime)) {
+      return null;
+    }
+    return {
+      at: new Date(atTime).toISOString(),
+      workspaceId: String(value.workspaceId || "").trim().slice(0, 120),
+      source: String(value.source || "").trim().slice(0, 60),
+      newDueCount: Math.max(0, Number.parseInt(String(value.newDueCount || 0), 10) || 0),
+    };
+  };
+
   const getWorkspaceStorageKey = () => {
     return state.workspaceId || "__default__";
   };
@@ -1382,7 +1403,7 @@
             method: "PATCH",
             body: JSON.stringify({ ownerUserId: ownerSelect.value || null }),
           });
-          setStatus("Asignacion de lead actualizada.");
+          setStatus("Asignacion de lead actualizada.", false, { toast: true });
           await fetchWorkspaceData();
         });
       });
@@ -1401,7 +1422,7 @@
               method: "POST",
               body: JSON.stringify({ event: config.event }),
             });
-            setStatus(`Health event aplicado: ${config.label}.`);
+            setStatus(`Health event aplicado: ${config.label}.`, false, { toast: true });
             await fetchWorkspaceData();
           });
         });
@@ -1766,7 +1787,7 @@
         }
         void withSyncGuard(async () => {
           await syncLeadPipelineStage(lead, stage.stage, stage.key, `Movido en tablero CRM a ${stage.label}.`);
-          setStatus(`Lead movido a ${stage.label}.`);
+          setStatus(`Lead movido a ${stage.label}.`, false, { toast: true });
           await fetchWorkspaceData();
         });
       });
@@ -1873,17 +1894,17 @@
     }
     const labelRaw = String(inputEl.value || "").trim();
     if (labelRaw.length < 2) {
-      setStatus("Escribe un nombre valido para la nueva etapa.", true);
+      setStatus("Escribe un nombre valido para la nueva etapa.", true, { toast: true });
       return;
     }
 
     const key = normalizePipelineStageKey(labelRaw);
     if (!key) {
-      setStatus("El nombre de etapa no es valido.", true);
+      setStatus("El nombre de etapa no es valido.", true, { toast: true });
       return;
     }
     if (getPipelineStageByKey(key)) {
-      setStatus("Esa etapa ya existe.", true);
+      setStatus("Esa etapa ya existe.", true, { toast: true });
       return;
     }
 
@@ -1901,7 +1922,7 @@
     renderStageShortcuts();
     renderStageFilters();
     renderStageLeads();
-    setStatus(`Etapa personalizada creada: ${labelRaw}.`);
+    setStatus(`Etapa personalizada creada: ${labelRaw}.`, false, { toast: true });
   };
 
   const renderTutorial = () => {
@@ -1945,12 +1966,33 @@
     });
   };
 
-  const setStatus = (text, isError = false) => {
+  const showActionToast = (text, isError = false) => {
+    const toast = state.nodes.actionToast;
+    if (!(toast instanceof HTMLElement)) {
+      return;
+    }
+    toast.textContent = text;
+    toast.classList.toggle("error", isError);
+    toast.classList.remove("wacrm-hidden");
+    if (state.nodes.actionToastTimer) {
+      window.clearTimeout(state.nodes.actionToastTimer);
+      state.nodes.actionToastTimer = null;
+    }
+    state.nodes.actionToastTimer = window.setTimeout(() => {
+      toast.classList.add("wacrm-hidden");
+      state.nodes.actionToastTimer = null;
+    }, isError ? 5200 : 3000);
+  };
+
+  const setStatus = (text, isError = false, options = {}) => {
     if (!state.nodes.statusEl) {
       return;
     }
     state.nodes.statusEl.textContent = text;
     state.nodes.statusEl.classList.toggle("error", isError);
+    if (options && options.toast) {
+      showActionToast(text, isError);
+    }
   };
 
   const isCrmSessionReady = () => {
@@ -2077,14 +2119,14 @@
     await runCopilot("reply");
     const text = String(state.nodes.copilotOutput?.value || "").trim();
     if (!text) {
-      setStatus("No se genero sugerencia de Copiloto.", true);
+      setStatus("No se genero sugerencia de Copiloto.", true, { toast: true });
       return;
     }
     const inserted = insertMessageIntoComposer(text);
     if (!inserted) {
       return;
     }
-    setStatus("Respuesta sugerida insertada. Envio manual.");
+    setStatus("Respuesta sugerida insertada. Envio manual.", false, { toast: true });
   };
 
   const runNativeQuickAction = (action) => {
@@ -2095,7 +2137,7 @@
 
     const guardMessage = getQuickActionGuardMessage(normalizedAction);
     if (guardMessage) {
-      setStatus(guardMessage, true);
+      setStatus(guardMessage, true, { toast: true });
       return;
     }
 
@@ -2405,7 +2447,7 @@
     if (mappedGuardAction) {
       const guardMessage = getQuickActionGuardMessage(mappedGuardAction);
       if (guardMessage) {
-        setStatus(guardMessage, true);
+        setStatus(guardMessage, true, { toast: true });
         return;
       }
     }
@@ -2740,6 +2782,7 @@
       state.leadInbox = null;
       state.productivity = null;
       state.currentLead = null;
+      state.reminderAlertSignal = null;
       renderTemplates();
       fillProfileForm(null);
       renderHotLeads();
@@ -2784,6 +2827,7 @@
       state.leadInbox = null;
       state.productivity = null;
       state.currentLead = null;
+      state.reminderAlertSignal = null;
       renderTemplates();
       renderHotLeads();
       renderCustomStageMeta();
@@ -2868,7 +2912,7 @@
   const insertMessageIntoComposer = (message) => {
     const composer = getComposerEl();
     if (!composer) {
-      setStatus("No se encontro el cuadro de mensaje en WhatsApp Web.", true);
+      setStatus("No se encontro el cuadro de mensaje en WhatsApp Web.", true, { toast: true });
       return false;
     }
 
@@ -2959,7 +3003,7 @@
     } catch (error) {
       const message = String(error?.message || "");
       if (message.toLowerCase().includes("limite por minuto")) {
-        setStatus("Limite por minuto del Copiloto alcanzado. Espera unos segundos.", true);
+        setStatus("Limite por minuto del Copiloto alcanzado. Espera unos segundos.", true, { toast: true });
         return;
       }
       throw error;
@@ -2969,13 +3013,13 @@
     if (state.nodes.copilotOutput) {
       state.nodes.copilotOutput.value = output;
     }
-    setStatus("Copiloto listo. Revisa el texto antes de insertarlo.");
+    setStatus("Copiloto listo. Revisa el texto antes de insertarlo.", false, { toast: true });
   };
 
   const insertCopilotOutput = async () => {
     const text = String(state.nodes.copilotOutput?.value || "").trim();
     if (!text) {
-      setStatus("Genera una sugerencia antes de insertar.", true);
+      setStatus("Genera una sugerencia antes de insertar.", true, { toast: true });
       return;
     }
     try {
@@ -2983,7 +3027,7 @@
     } catch (error) {
       const message = String(error?.message || "");
       if (message.toLowerCase().includes("limite por minuto")) {
-        setStatus("Limite por minuto del Copiloto alcanzado. Espera unos segundos.", true);
+        setStatus("Limite por minuto del Copiloto alcanzado. Espera unos segundos.", true, { toast: true });
         return;
       }
       throw error;
@@ -2992,7 +3036,7 @@
     if (!inserted) {
       return;
     }
-    setStatus("Texto del copiloto insertado. Envio manual.");
+    setStatus("Texto del copiloto insertado. Envio manual.", false, { toast: true });
   };
 
   const handoffToHuman = async () => {
@@ -3002,7 +3046,7 @@
       method: "POST",
       body: JSON.stringify({ note: "Derivacion manual a humano solicitada desde Copiloto." }),
     });
-    setStatus("Lead marcado para derivacion humana.");
+    setStatus("Lead marcado para derivacion humana.", false, { toast: true });
   };
 
   const getOverdueReminders = () => {
@@ -3155,10 +3199,72 @@
     state.dismissedReminderSignature = state.overdueReminderSignature;
   };
 
+  const playReminderAlertSound = () => {
+    const now = Date.now();
+    if (now - Number(state.lastReminderSoundAt || 0) < 2200) {
+      return;
+    }
+    state.lastReminderSoundAt = now;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) {
+        return;
+      }
+      const context = new AudioCtx();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = 880;
+      gain.gain.value = 0.0001;
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+
+      const start = context.currentTime;
+      gain.gain.exponentialRampToValueAtTime(0.12, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.24);
+      oscillator.start(start);
+      oscillator.stop(start + 0.26);
+      oscillator.onended = () => {
+        context.close().catch(() => {});
+      };
+    } catch (_error) {
+      // Ignore audio playback failures due to browser gesture/autoplay policies.
+    }
+  };
+
+  const clearReminderAlertSignal = async () => {
+    state.reminderAlertSignal = null;
+    await storageSet({ [REMINDER_ALERT_SIGNAL_KEY]: null });
+  };
+
+  const consumeReminderAlertSignal = async (overdueReminders = []) => {
+    const signal = state.reminderAlertSignal;
+    if (!signal) {
+      return;
+    }
+
+    const signalTime = new Date(signal.at || "").getTime();
+    const isFresh = !Number.isNaN(signalTime) && Date.now() - signalTime <= 10 * 60 * 1000;
+    if (!isFresh) {
+      await clearReminderAlertSignal();
+      return;
+    }
+
+    if (!Array.isArray(overdueReminders) || overdueReminders.length === 0) {
+      return;
+    }
+
+    playReminderAlertSound();
+    openReminderCenter();
+    setStatus(`Tienes ${overdueReminders.length} recordatorio(s) vencido(s).`, false, { toast: true });
+    await clearReminderAlertSignal();
+  };
+
   const renderReminderAlerts = () => {
     const overdueReminders = getOverdueReminders();
     renderReminderCenter(overdueReminders);
     maybeShowReminderToast(overdueReminders);
+    void consumeReminderAlertSignal(overdueReminders);
   };
 
   const getNextDueReminderForLead = (leadId) => {
@@ -3199,7 +3305,7 @@
     const lead = await ensureCurrentLead();
     const todayCount = await getTodayFollowupCount();
     if (todayCount >= FOLLOWUP_DAILY_LIMIT) {
-      setStatus(`Limite diario alcanzado (${FOLLOWUP_DAILY_LIMIT}). Vuelve a intentar manana.`, true);
+      setStatus(`Limite diario alcanzado (${FOLLOWUP_DAILY_LIMIT}). Vuelve a intentar manana.`, true, { toast: true });
       await refreshFollowupMeta();
       return;
     }
@@ -3226,14 +3332,14 @@
     }
 
     await refreshFollowupMeta();
-    setStatus(`Seguimiento insertado. Revisa y envia manualmente (${nextCount}/${FOLLOWUP_DAILY_LIMIT} hoy).`);
+    setStatus(`Seguimiento insertado. Revisa y envia manualmente (${nextCount}/${FOLLOWUP_DAILY_LIMIT} hoy).`, false, { toast: true });
   };
 
   const insertTemplateIntoComposer = () => {
     const templateId = state.nodes.templateSelect?.value || "";
     const template = state.templates.find((item) => item.id === templateId);
     if (!template) {
-      setStatus("Selecciona una plantilla valida.", true);
+      setStatus("Selecciona una plantilla valida.", true, { toast: true });
       return;
     }
 
@@ -3245,7 +3351,7 @@
     }
 
     void markTutorialStep("insert_template");
-    setStatus("Plantilla insertada. Revisa y envia manualmente.");
+    setStatus("Plantilla insertada. Revisa y envia manualmente.", false, { toast: true });
   };
 
   const closePhoneCaptureModal = (options = {}) => {
@@ -3308,7 +3414,7 @@
       state.nodes.phoneInput.value = normalized;
     }
     closePhoneCaptureModal({ focusPhoneInput: false });
-    setStatus("Numero actualizado. Guardando lead...");
+    setStatus("Numero actualizado. Guardando lead...", false, { toast: true });
     void withSyncGuard(saveLead);
   };
 
@@ -3334,17 +3440,17 @@
     }
 
     if (!name) {
-      setStatus("Completa el nombre del contacto para guardar el lead.", true);
+      setStatus("Completa el nombre del contacto para guardar el lead.", true, { toast: true });
       return;
     }
 
     if (!phone) {
       const opened = openPhoneCaptureModal();
       if (opened) {
-        setStatus("No pude detectar telefono automaticamente. Usa el mini modal para pegar numero y guardar.");
+        setStatus("No pude detectar telefono automaticamente. Usa el mini modal para pegar numero y guardar.", false, { toast: true });
         return;
       }
-      setStatus("No pude detectar telefono automaticamente. Pega el numero E.164 (+519...) y vuelve a guardar.", true);
+      setStatus("No pude detectar telefono automaticamente. Pega el numero E.164 (+519...) y vuelve a guardar.", true, { toast: true });
       return;
     }
 
@@ -3377,7 +3483,7 @@
       void markTutorialStep("add_profile");
     }
     void markTutorialStep("save_lead");
-    setStatus("Lead/ficha guardados.");
+    setStatus("Lead/ficha guardados.", false, { toast: true });
     await fetchWorkspaceData();
   };
 
@@ -3424,7 +3530,7 @@
     const nextPipelineKey = isCurrentCompatible ? currentPipelineKey : getDefaultPipelineKeyFromStage(stage);
     await syncLeadPipelineStage(lead, stage, nextPipelineKey);
     void markTutorialStep("set_stage");
-    setStatus("Etapa actualizada.");
+    setStatus("Etapa actualizada.", false, { toast: true });
     await fetchWorkspaceData();
   };
 
@@ -3432,7 +3538,7 @@
     const lead = await ensureCurrentLead();
     await syncLeadPipelineStage(lead, shortcut.stage, shortcut.key, shortcut.note);
     void markTutorialStep("set_stage");
-    setStatus(`Atajo aplicado: ${shortcut.label}.`);
+    setStatus(`Atajo aplicado: ${shortcut.label}.`, false, { toast: true });
     await fetchWorkspaceData();
   };
 
@@ -3441,7 +3547,7 @@
 
     const note = String(state.nodes.noteInput?.value || "").trim();
     if (!note) {
-      setStatus("Escribe una nota antes de guardar.", true);
+      setStatus("Escribe una nota antes de guardar.", true, { toast: true });
       return;
     }
 
@@ -3450,7 +3556,7 @@
       body: JSON.stringify({ note }),
     });
     state.nodes.noteInput.value = "";
-    setStatus("Nota guardada.");
+    setStatus("Nota guardada.", false, { toast: true });
     await fetchWorkspaceData();
   };
 
@@ -3461,7 +3567,7 @@
     const dueAtLocal = String(state.nodes.reminderDateInput?.value || "").trim();
     const dueDate = new Date(dueAtLocal);
     if (!note || !dueAtLocal || Number.isNaN(dueDate.getTime())) {
-      setStatus("Completa nota y fecha valida para el recordatorio.", true);
+      setStatus("Completa nota y fecha valida para el recordatorio.", true, { toast: true });
       return;
     }
     const dueAtIso = dueDate.toISOString();
@@ -3476,7 +3582,7 @@
     });
     state.nodes.reminderNoteInput.value = "";
     void markTutorialStep("create_followup");
-    setStatus("Recordatorio creado.");
+    setStatus("Recordatorio creado.", false, { toast: true });
     await fetchWorkspaceData();
   };
 
@@ -3499,7 +3605,7 @@
       }),
     });
     void markTutorialStep("create_followup");
-    setStatus("Seguimiento rapido creado.");
+    setStatus("Seguimiento rapido creado.", false, { toast: true });
     await fetchWorkspaceData();
   };
 
@@ -3512,7 +3618,7 @@
     try {
       await task();
     } catch (error) {
-      setStatus(error?.message || "Error inesperado.", true);
+      setStatus(error?.message || "Error inesperado.", true, { toast: true });
     } finally {
       state.syncing = false;
       setModeState();
@@ -3835,6 +3941,7 @@
             <button type="button" class="wacrm-btn ghost wacrm-btn-xs" id="wacrm-reminder-toast-dismiss">Cerrar</button>
           </div>
         </div>
+        <div class="wacrm-action-toast wacrm-hidden" id="wacrm-action-toast" role="status" aria-live="polite"></div>
       </div>
     `;
 
@@ -3907,6 +4014,8 @@
     state.nodes.reminderCenterList = root.querySelector("#wacrm-reminder-center-list");
     state.nodes.reminderToast = root.querySelector("#wacrm-reminder-toast");
     state.nodes.reminderToastText = root.querySelector("#wacrm-reminder-toast-text");
+    state.nodes.actionToast = root.querySelector("#wacrm-action-toast");
+    state.nodes.actionToastTimer = null;
     state.nodes.phoneModalOverlay = root.querySelector("#wacrm-phone-modal-overlay");
     state.nodes.phoneModalInput = root.querySelector("#wacrm-phone-modal-input");
     state.nodes.phoneModalLeadName = root.querySelector("#wacrm-phone-modal-lead-name");
@@ -4061,7 +4170,7 @@
         const lead = state.leads.find((item) => String(item?.id || "") === leadId);
         if (lead) {
           openLeadChat(lead);
-          setStatus("Chat abierto desde recordatorios.");
+          setStatus("Chat abierto desde recordatorios.", false, { toast: true });
         }
         return;
       }
@@ -4075,7 +4184,7 @@
             method: "PATCH",
             body: JSON.stringify({}),
           });
-          setStatus("Recordatorio completado.");
+          setStatus("Recordatorio completado.", false, { toast: true });
           await fetchWorkspaceData();
         });
       }
@@ -4119,7 +4228,7 @@
       renderStageFilters();
       renderStageLeads();
       syncLeadWithPhone();
-      setStatus(`Plantilla activa: ${state.templateMode === "real_estate" ? "Inmobiliaria" : "General"}.`);
+      setStatus(`Plantilla activa: ${state.templateMode === "real_estate" ? "Inmobiliaria" : "General"}.`, false, { toast: true });
     });
     state.nodes.inboxFiltersEl?.addEventListener("click", (event) => {
       const target = event.target;
@@ -4159,6 +4268,7 @@
     state.customStageStore = normalizeCustomStageStore(values[CUSTOM_STAGES_KEY]);
     state.templateModeStore = normalizeTemplateModeStore(values[TEMPLATE_MODE_KEY]);
     state.chatLeadBindingsStore = normalizeChatLeadBindingsStore(values[CHAT_LEAD_BINDINGS_KEY]);
+    state.reminderAlertSignal = normalizeReminderAlertSignal(values[REMINDER_ALERT_SIGNAL_KEY]);
     state.blurMode = Boolean(values[BLUR_MODE_KEY]);
     applyWorkspaceCustomStages();
     applyWorkspaceTemplateMode();
@@ -4224,6 +4334,10 @@
           if (changes[CHAT_LEAD_BINDINGS_KEY]) {
             state.chatLeadBindingsStore = normalizeChatLeadBindingsStore(changes[CHAT_LEAD_BINDINGS_KEY].newValue);
             applyWorkspaceChatLeadBindings();
+          }
+          if (changes[REMINDER_ALERT_SIGNAL_KEY]) {
+            state.reminderAlertSignal = normalizeReminderAlertSignal(changes[REMINDER_ALERT_SIGNAL_KEY].newValue);
+            maybeAutoSyncWorkspaceData(true);
           }
           if (changes[BLUR_MODE_KEY]) {
             state.blurMode = Boolean(changes[BLUR_MODE_KEY].newValue);
