@@ -42,7 +42,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - cabecera del panel con campana de alertas de recordatorios vencidos (badge rojo), centro de avisos con acciones rapidas (`Abrir chat`/`Completar`/`Eliminar`), mini modal emergente y sonido de alerta al recibir eventos de vencimiento
     - feedback de acciones reforzado: confirmaciones visuales de exito/error en panel embebido (toast) y popup para evitar dudas de guardado/ejecucion
     - asociacion automatica chat -> lead con prioridad por telefono y memoria de contexto por workspace (fallback por nombre unico), incluyendo autocompletado de telefono al guardar lead nuevo cuando el chat expone numero y mini modal de captura ("Pegar numero y guardar") cuando no se detecta automaticamente
-    - sincronizacion dinamica de datos del workspace (templates/leads/reminders/compliance) sin recargar pagina, con auto-refresh por intervalo y al volver foco/visibilidad
+    - sincronizacion dinamica de datos del workspace (templates/leads/reminders/compliance) sin recargar pagina, con auto-refresh mas conservador para reducir consumo de cuota y refresco inmediato al volver foco/visibilidad
     - degradacion defensiva en popup/panel: si endpoints de lectura (`/reminders`, `/templates`, `/leads`, `/auth/users`, `/leads/inbox`, etc.) fallan de forma aislada con `5xx`, el resto del CRM sigue operativo con fallback local/estado vacio y la sesion local no se invalida visualmente
     - sincronizacion instantanea popup -> panel embebido via `chrome.storage` (`crm_workspace_refresh_tick`) para reflejar cambios en caliente tras guardar entidades
     - modo privacidad `Blur demo` para ocultar chats/mensajes durante demos
@@ -51,7 +51,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - `Messaging Mode` visible en panel (`crm_manual` vs `cloud_api`, con indicador de proveedor/fallback `dry_run`)
     - bandeja multiagente en panel (`my`, `unassigned`, `overdue`, `all`) con acciones de asignacion y health events
     - resumen operativo de productividad en panel (funnel por etapa + top agentes con carga y vencidos)
-  - Incluye `background service worker` para revisar recordatorios vencidos y emitir notificaciones de escritorio (sin auto-envio).
+  - Incluye `background service worker` para revisar recordatorios vencidos con polling mas espaciado y emitir notificaciones de escritorio (sin auto-envio).
   - Popup CRM agrega capacidades avanzadas sin romper contrato API:
     - Kanban real con drag & drop por etapas (actualiza stage via `PATCH /api/v1/leads/:leadId/stage`)
     - pestanas/segmentos personalizadas por workspace (filtros por tag, fuente, etapa, urgencia, agente) con chips de accion y borrado directo por `x` para reducir confusiones, visibles tanto en popup como en panel embebido (Contactos por etapa)

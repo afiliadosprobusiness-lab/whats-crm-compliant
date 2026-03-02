@@ -55,8 +55,8 @@
   const WORKSPACE_REFRESH_SIGNAL_KEY = "crm_workspace_refresh_tick";
   const REMINDER_ALERT_SIGNAL_KEY = "crm_reminder_alert_signal_v1";
   const VIEW_REFRESH_TICK_MS = 2500;
-  const WORKSPACE_AUTOSYNC_ACTIVE_MS = 12000;
-  const WORKSPACE_AUTOSYNC_IDLE_MS = 30000;
+  const WORKSPACE_AUTOSYNC_ACTIVE_MS = 60000;
+  const WORKSPACE_AUTOSYNC_IDLE_MS = 180000;
   const QUICK_ACTION_HELP = {
     "save-lead": "Guardar: completa Nombre + Telefono E.164 para crear/actualizar el lead.",
     "copilot-summary": "Resumen: genera un resumen del lead actual.",
@@ -3319,10 +3319,13 @@
     if (!meData?.user) {
       throw new Error("No se pudo validar la sesion con el backend.");
     }
-    const billingData = await loadApiWithFallback(
-      "/billing/subscription",
-      { subscription: state.subscription || null },
-    );
+    const billingData =
+      state.subscription
+        ? { subscription: state.subscription }
+        : await loadApiWithFallback(
+            "/billing/subscription",
+            { subscription: state.subscription || null },
+          );
     state.me = meData.user || null;
     state.workspaceId = String(meData?.workspace?.id || meData?.user?.workspaceId || "").trim();
     applyWorkspaceCustomStages();

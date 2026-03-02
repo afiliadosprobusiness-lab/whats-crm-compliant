@@ -85,10 +85,10 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido y popup agregan ayudas hover (`title`) en controles clave para explicar para que sirve cada opcion y como usarla.
   - Panel embebido refuerza `Tutorial` con checklist y guia completa de funciones (modulo + flujo recomendado de uso).
   - Panel embebido asocia automaticamente chat -> lead priorizando telefono y memoria de contexto por workspace (fallback por nombre unico), autocompleta telefono al guardar leads nuevos cuando el chat expone numero y abre mini modal de captura ("Pegar numero y guardar") cuando no se detecta telefono.
-  - Panel embebido sincroniza datos en caliente sin recargar (templates/leads/reminders/compliance), con auto-refresh por intervalo y refresco inmediato al recuperar foco.
+  - Panel embebido sincroniza datos en caliente sin recargar (templates/leads/reminders/compliance), con auto-refresh mas espaciado para reducir lecturas y refresco inmediato al recuperar foco.
   - Popup y panel degradan de forma segura si fallan lecturas secundarias (`GET /api/v1/reminders`, `GET /api/v1/templates`, `GET /api/v1/leads`, `GET /api/v1/auth/users`, `GET /api/v1/leads/inbox`, etc.): mantienen la sesion local y siguen operativos con fallback local o listas vacias hasta el siguiente refresh exitoso.
   - Popup y panel embebido propagan refresco inmediato via storage key `crm_workspace_refresh_tick` para reflejar altas/cambios sin recargar.
-  - `background service worker` de extension para polling de recordatorios vencidos (`chrome.alarms`) y alertas nativas (`chrome.notifications`).
+  - `background service worker` de extension para polling de recordatorios vencidos (`chrome.alarms`) con menor frecuencia y alertas nativas (`chrome.notifications`).
   - Estado de sesion.
   - Estado de suscripcion (badge Activo/Inactivo); activacion/renovacion se gestiona desde superadmin.
   - KPIs basicos.

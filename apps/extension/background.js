@@ -1,7 +1,7 @@
 const DEFAULT_API_BASE_URL = "https://whats-crm-compliant.vercel.app/api/v1";
 const BACKEND_URL_STORAGE_KEY = "crm_backend_url";
 const REMINDER_ALARM_NAME = "wacrm_reminder_check_v1";
-const REMINDER_ALARM_PERIOD_MINUTES = 1;
+const REMINDER_ALARM_PERIOD_MINUTES = 5;
 const NOTIFIED_REMINDERS_KEY = "crm_notified_reminders_v1";
 const REMINDER_ALERT_SIGNAL_KEY = "crm_reminder_alert_signal_v1";
 const NOTIFIED_RETENTION_DAYS = 14;
@@ -135,29 +135,7 @@ const checkDueReminders = async () => {
       "Content-Type": "application/json",
     };
 
-    const [meData, billingData] = await Promise.all([
-      fetchJson(`${apiBaseUrl}/auth/me`, { headers: authHeaders }),
-      fetchJson(`${apiBaseUrl}/billing/subscription`, { headers: authHeaders }),
-    ]);
-
-    if (!billingData?.subscription?.canUseCrm) {
-      return;
-    }
-
-    const workspaceId = String(meData?.workspace?.id || "");
-    if (!workspaceId) {
-      return;
-    }
-
-    const [remindersData, leadsData] = await Promise.all([
-      fetchJson(`${apiBaseUrl}/reminders`, { headers: authHeaders }),
-      fetchJson(`${apiBaseUrl}/leads`, { headers: authHeaders }),
-    ]);
-
-    const leads = Array.isArray(leadsData?.leads) ? leadsData.leads : [];
-    const leadsById = new Map(
-      leads.map((lead) => [String(lead?.id || ""), String(lead?.name || "Lead")]),
-    );
+    const remindersData = await fetchJson(`${apiBaseUrl}/reminders`, { headers: authHeaders });
     const reminders = Array.isArray(remindersData?.reminders) ? remindersData.reminders : [];
     const nowTime = Date.now();
 
@@ -174,12 +152,16 @@ const checkDueReminders = async () => {
 
     let newDueCount = 0;
     for (const reminder of dueReminders) {
+      const workspaceId = String(reminder?.workspaceId || "");
+      if (!workspaceId) {
+        continue;
+      }
       const reminderKey = toReminderKey(workspaceId, reminder);
       if (normalizedCache[reminderKey]) {
         continue;
       }
 
-      const leadName = leadsById.get(String(reminder.leadId || "")) || "Lead";
+      const leadName = String(reminder?.leadId || "Lead");
       const note = String(reminder.note || "Seguimiento pendiente").slice(0, 180);
       const dueAtLabel = new Date(reminder.dueAt).toLocaleString();
       const notificationId = `wacrm_rem_${String(reminder.id || Date.now())}_${Date.now()}`;
@@ -202,7 +184,6 @@ const checkDueReminders = async () => {
       await storageSet({
         [REMINDER_ALERT_SIGNAL_KEY]: {
           at: new Date().toISOString(),
-          workspaceId,
           newDueCount,
         },
       });
