@@ -43,7 +43,13 @@
     { event: "no_response_72h", label: "72h" },
     { event: "spam_reported", label: "Spam" },
   ];
-  const CRM_BUILD_TAG = "0.4.10-2026-03-01";
+  const CRM_BUILD_TAG = (() => {
+    try {
+      return String(chrome?.runtime?.getManifest?.().version || "dev");
+    } catch (_error) {
+      return "dev";
+    }
+  })();
   const WA_TOP_BAR_ID = "wacrm-wa-topbar";
   const WA_COMPOSER_BAR_ID = "wacrm-wa-composerbar";
   const WORKSPACE_REFRESH_SIGNAL_KEY = "crm_workspace_refresh_tick";
@@ -392,13 +398,55 @@
     return payload?.error?.message || `HTTP ${response.status}`;
   };
 
-  const apiRequest = async (path, options = {}) => {
+  const toHealthUrl = (apiBaseUrl) => {
+    try {
+      const parsed = new URL(apiBaseUrl);
+      parsed.pathname = parsed.pathname.replace(/\/api\/v1\/?$/, "") || "";
+      parsed.search = "";
+      parsed.hash = "";
+      return `${parsed.toString().replace(/\/$/, "")}/health`;
+    } catch (_error) {
+      return "https://whats-crm-compliant.vercel.app/health";
+    }
+  };
+
+  const tryRecoverApiBaseUrl = async () => {
+    if (state.apiBaseUrl === DEFAULT_API_BASE_URL) {
+      return false;
+    }
+
+    try {
+      const response = await fetch(toHealthUrl(DEFAULT_API_BASE_URL));
+      if (!response.ok) {
+        return false;
+      }
+    } catch (_error) {
+      return false;
+    }
+
+    state.apiBaseUrl = DEFAULT_API_BASE_URL;
+    resetApiCapabilities();
+    return true;
+  };
+
+  const apiRequest = async (path, options = {}, allowRecovery = true) => {
     const headers = options.headers || {};
     const authHeaders = state.token ? { Authorization: `Bearer ${state.token}` } : {};
-    const response = await fetch(`${state.apiBaseUrl}${path}`, {
-      headers: { "Content-Type": "application/json", ...authHeaders, ...headers },
-      ...options,
-    });
+    let response;
+    try {
+      response = await fetch(`${state.apiBaseUrl}${path}`, {
+        headers: { "Content-Type": "application/json", ...authHeaders, ...headers },
+        ...options,
+      });
+    } catch (_error) {
+      if (allowRecovery && await tryRecoverApiBaseUrl()) {
+        return apiRequest(path, options, false);
+      }
+
+      const error = new Error("No se pudo conectar con el backend.");
+      error.statusCode = 0;
+      throw error;
+    }
 
     if (!response.ok) {
       const error = new Error(await parseApiError(response));
@@ -2959,7 +3007,7 @@
     }
 
     if (!state.token) {
-      gateEl.textContent = "Inicia sesion en la extension para activar el CRM.";
+      gateEl.textContent = "Abre el popup de la extension e inicia sesion para activar el CRM.";
       gateEl.classList.remove("wacrm-hidden");
       toolsEl.classList.add("wacrm-hidden");
       renderNativeActionBars();

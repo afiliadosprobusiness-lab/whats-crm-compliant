@@ -338,6 +338,18 @@ const normalizeApiBaseUrl = (input) => {
   }
 };
 
+const toHealthUrl = (apiBaseUrl) => {
+  try {
+    const parsed = new URL(apiBaseUrl);
+    parsed.pathname = parsed.pathname.replace(/\/api\/v1\/?$/, "") || "";
+    parsed.search = "";
+    parsed.hash = "";
+    return `${parsed.toString().replace(/\/$/, "")}/health`;
+  } catch (_error) {
+    return "https://whats-crm-compliant.vercel.app/health";
+  }
+};
+
 const isLeadOptedIn = (lead) => {
   if (typeof lead?.opted_in === "boolean") {
     return lead.opted_in;
@@ -585,14 +597,14 @@ const resetApiCapabilities = () => {
   };
 };
 
-const persistToken = (token) => {
+const persistToken = async (token) => {
   state.token = token;
   if (token) {
     localStorage.setItem("crm_token", token);
   } else {
     localStorage.removeItem("crm_token");
   }
-  void storageSet({ crm_token: token || "" });
+  await storageSet({ crm_token: token || "" });
 };
 
 const persistApiBaseUrl = async (apiBaseUrl) => {
@@ -607,13 +619,43 @@ const persistApiBaseUrl = async (apiBaseUrl) => {
   renderBackendConfig();
 };
 
-const apiRequest = async (path, options = {}) => {
+const tryRecoverApiBaseUrl = async () => {
+  if (state.apiBaseUrl === DEFAULT_API_BASE_URL) {
+    return false;
+  }
+
+  try {
+    const response = await fetch(toHealthUrl(DEFAULT_API_BASE_URL));
+    if (!response.ok) {
+      return false;
+    }
+  } catch (_error) {
+    return false;
+  }
+
+  await persistApiBaseUrl(DEFAULT_API_BASE_URL);
+  resetApiCapabilities();
+  return true;
+};
+
+const apiRequest = async (path, options = {}, allowRecovery = true) => {
   const extraHeaders = options.headers || {};
   const authHeaders = state.token ? { Authorization: `Bearer ${state.token}` } : {};
-  const response = await fetch(`${state.apiBaseUrl}${path}`, {
-    headers: { "Content-Type": "application/json", ...authHeaders, ...extraHeaders },
-    ...options,
-  });
+  let response;
+  try {
+    response = await fetch(`${state.apiBaseUrl}${path}`, {
+      headers: { "Content-Type": "application/json", ...authHeaders, ...extraHeaders },
+      ...options,
+    });
+  } catch (_error) {
+    if (allowRecovery && await tryRecoverApiBaseUrl()) {
+      return apiRequest(path, options, false);
+    }
+
+    const error = new Error("No se pudo conectar con el backend.");
+    error.statusCode = 0;
+    throw error;
+  }
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -1540,7 +1582,7 @@ const bootstrapAuthenticated = async () => {
 
 const resetState = () => {
   resetApiCapabilities();
-  persistToken("");
+  void persistToken("");
   state.authUser = null;
   state.workspace = null;
   state.subscription = null;
@@ -1775,8 +1817,18 @@ document.getElementById("login-form").addEventListener("submit", async (event) =
       method: "POST",
       body: JSON.stringify(payload),
     });
-    persistToken(result.token);
-    await bootstrapAuthenticated();
+    await persistToken(result.token);
+    try {
+      await bootstrapAuthenticated();
+    } catch (error) {
+      const statusCode = Number(error?.statusCode || 0);
+      if (statusCode === 401 || statusCode === 403) {
+        resetState();
+        setFeedback(`${tr("session_invalid", "Sesion invalida:")} ${error.message}`, true);
+        return;
+      }
+      setFeedback(`${tr("session_retained", "Sesion guardada. Reintenta cuando el backend responda.")} ${error.message}`, true);
+    }
   } catch (error) {
     setFeedback(error.message || "Login failed", true);
   }
@@ -1798,9 +1850,19 @@ document.getElementById("register-form").addEventListener("submit", async (event
       method: "POST",
       body: JSON.stringify(payload),
     });
-    persistToken(result.token);
+    await persistToken(result.token);
     setFeedback(tr("account_created", "Cuenta creada. Sesion iniciada."));
-    await bootstrapAuthenticated();
+    try {
+      await bootstrapAuthenticated();
+    } catch (error) {
+      const statusCode = Number(error?.statusCode || 0);
+      if (statusCode === 401 || statusCode === 403) {
+        resetState();
+        setFeedback(`${tr("session_invalid", "Sesion invalida:")} ${error.message}`, true);
+        return;
+      }
+      setFeedback(`${tr("session_retained", "Sesion guardada. Reintenta cuando el backend responda.")} ${error.message}`, true);
+    }
   } catch (error) {
     setFeedback(error.message || "Register failed", true);
   }
