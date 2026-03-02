@@ -667,6 +667,23 @@ const apiRequest = async (path, options = {}, allowRecovery = true) => {
   return payload;
 };
 
+const loadApiWithFallback = async (
+  path,
+  fallbackValue,
+  options = {},
+  rethrowStatuses = [401, 403],
+) => {
+  try {
+    return await apiRequest(path, options);
+  } catch (error) {
+    const statusCode = Number(error?.statusCode || 0);
+    if (rethrowStatuses.includes(statusCode)) {
+      throw error;
+    }
+    return fallbackValue;
+  }
+};
+
 const isEndpointMissingError = (error) => {
   const status = Number(error?.statusCode || 0);
   return status === 404 || status === 405;
@@ -681,6 +698,11 @@ const optionalApiRequest = async (capabilityKey, path, fallbackValue) => {
     return await apiRequest(path);
   } catch (error) {
     if (isEndpointMissingError(error)) {
+      state.apiCapabilities[capabilityKey] = false;
+      return fallbackValue;
+    }
+    const statusCode = Number(error?.statusCode || 0);
+    if (statusCode >= 500 || statusCode === 0) {
       state.apiCapabilities[capabilityKey] = false;
       return fallbackValue;
     }
@@ -1483,7 +1505,10 @@ const renderSegmentLeads = () => {
 };
 
 const refreshSubscription = async () => {
-  const data = await apiRequest("/billing/subscription");
+  const data = await loadApiWithFallback(
+    "/billing/subscription",
+    { subscription: state.subscription || null },
+  );
   state.subscription = data.subscription || null;
   renderSubscription();
 };
@@ -1502,9 +1527,9 @@ const fetchLeadInbox = async (view = state.leadInboxView) => {
 const refreshData = async () => {
   const safeView = inboxViews.includes(state.leadInboxView) ? state.leadInboxView : "my";
   const [leadsData, templatesData, campaignsData, remindersData] = await Promise.all([
-    apiRequest("/leads"),
-    apiRequest("/templates"),
-    apiRequest("/campaigns"),
+    loadApiWithFallback("/leads", { leads: state.leads || [] }),
+    loadApiWithFallback("/templates", { templates: state.templates || [] }),
+    loadApiWithFallback("/campaigns", { campaigns: state.campaigns || [] }),
     loadRemindersSafely(),
   ]);
   const [complianceData, usersData, inboxData, analyticsData, modeData] = await Promise.all([
@@ -1545,7 +1570,17 @@ const refreshData = async () => {
 
 const bootstrapAuthenticated = async () => {
   resetApiCapabilities();
-  const me = await apiRequest("/auth/me");
+  const me =
+    state.authUser && state.workspace
+      ? {
+          user: state.authUser,
+          workspace: state.workspace,
+          sessionToken: state.token,
+        }
+      : await loadApiWithFallback("/auth/me", {});
+  if (!me?.user || !me?.workspace) {
+    throw new Error("No se pudo validar la sesion con el backend.");
+  }
   state.authUser = me.user;
   state.workspace = me.workspace;
   applyWorkspaceSegments();
@@ -1817,6 +1852,9 @@ document.getElementById("login-form").addEventListener("submit", async (event) =
       method: "POST",
       body: JSON.stringify(payload),
     });
+    state.authUser = result.user || null;
+    state.workspace = result.workspace || null;
+    renderSession();
     await persistToken(result.token);
     try {
       await bootstrapAuthenticated();
@@ -1850,6 +1888,9 @@ document.getElementById("register-form").addEventListener("submit", async (event
       method: "POST",
       body: JSON.stringify(payload),
     });
+    state.authUser = result.user || null;
+    state.workspace = result.workspace || null;
+    renderSession();
     await persistToken(result.token);
     setFeedback(tr("account_created", "Cuenta creada. Sesion iniciada."));
     try {

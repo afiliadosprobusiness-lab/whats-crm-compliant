@@ -43,7 +43,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - feedback de acciones reforzado: confirmaciones visuales de exito/error en panel embebido (toast) y popup para evitar dudas de guardado/ejecucion
     - asociacion automatica chat -> lead con prioridad por telefono y memoria de contexto por workspace (fallback por nombre unico), incluyendo autocompletado de telefono al guardar lead nuevo cuando el chat expone numero y mini modal de captura ("Pegar numero y guardar") cuando no se detecta automaticamente
     - sincronizacion dinamica de datos del workspace (templates/leads/reminders/compliance) sin recargar pagina, con auto-refresh por intervalo y al volver foco/visibilidad
-    - degradacion defensiva en popup/panel: si `/reminders` falla de forma aislada, el resto del CRM sigue operativo y la sesion local no se invalida visualmente
+    - degradacion defensiva en popup/panel: si endpoints de lectura (`/reminders`, `/templates`, `/leads`, `/auth/users`, `/leads/inbox`, etc.) fallan de forma aislada con `5xx`, el resto del CRM sigue operativo con fallback local/estado vacio y la sesion local no se invalida visualmente
     - sincronizacion instantanea popup -> panel embebido via `chrome.storage` (`crm_workspace_refresh_tick`) para reflejar cambios en caliente tras guardar entidades
     - modo privacidad `Blur demo` para ocultar chats/mensajes durante demos
     - bloque `Copiloto asistido` (sugerir respuesta, resumir lead, siguiente accion y derivacion humana) sin auto-envio

@@ -457,6 +457,23 @@
     return response.json().catch(() => ({}));
   };
 
+  const loadApiWithFallback = async (
+    path,
+    fallbackValue,
+    options = {},
+    rethrowStatuses = [401, 403],
+  ) => {
+    try {
+      return await apiRequest(path, options);
+    } catch (error) {
+      const statusCode = Number(error?.statusCode || 0);
+      if (rethrowStatuses.includes(statusCode)) {
+        throw error;
+      }
+      return fallbackValue;
+    }
+  };
+
   const isEndpointMissingError = (error) => {
     const status = Number(error?.statusCode || 0);
     return status === 404 || status === 405;
@@ -471,6 +488,11 @@
       return await apiRequest(path, options);
     } catch (error) {
       if (isEndpointMissingError(error)) {
+        state.apiCapabilities[capabilityKey] = false;
+        return fallbackValue;
+      }
+      const statusCode = Number(error?.statusCode || 0);
+      if (statusCode >= 500 || statusCode === 0) {
         state.apiCapabilities[capabilityKey] = false;
         return fallbackValue;
       }
@@ -3287,8 +3309,20 @@
       return;
     }
 
-    const meData = await apiRequest("/auth/me");
-    const billingData = await apiRequest("/billing/subscription");
+    const meData =
+      state.me && state.workspaceId
+        ? {
+            user: state.me,
+            workspace: { id: state.workspaceId },
+          }
+        : await loadApiWithFallback("/auth/me", {});
+    if (!meData?.user) {
+      throw new Error("No se pudo validar la sesion con el backend.");
+    }
+    const billingData = await loadApiWithFallback(
+      "/billing/subscription",
+      { subscription: state.subscription || null },
+    );
     state.me = meData.user || null;
     state.workspaceId = String(meData?.workspace?.id || meData?.user?.workspaceId || "").trim();
     applyWorkspaceCustomStages();
@@ -3343,8 +3377,8 @@
       productivityData,
       modeData,
     ] = await Promise.all([
-      apiRequest("/templates"),
-      apiRequest("/leads"),
+      loadApiWithFallback("/templates", { templates: state.templates || [] }),
+      loadApiWithFallback("/leads", { leads: state.leads || [] }),
       loadRemindersSafely(),
       optionalApiRequest("complianceTrustCenter", "/compliance/trust-center", { trustCenter: null }),
       optionalApiRequest("authUsers", "/auth/users", { users: [] }),
