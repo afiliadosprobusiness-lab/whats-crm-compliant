@@ -1,4 +1,5 @@
 import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
+import { compareIsoDateAsc, compareIsoDateDesc } from "../../core/sort.js";
 import type { PaymentRecord, Session, User, Workspace } from "./auth.types.js";
 
 const COLLECTIONS = {
@@ -90,7 +91,7 @@ export class AuthRepository {
     const querySnap = await this.db.collection(COLLECTIONS.users).where("workspaceId", "==", workspaceId).get();
     return querySnap.docs
       .map((doc) => doc.data() as User)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      .sort((a, b) => compareIsoDateAsc(a.createdAt, b.createdAt));
   }
 
   public async createSession(session: Session): Promise<Session> {
@@ -125,6 +126,6 @@ export class AuthRepository {
 
     return querySnap.docs
       .map((doc) => doc.data() as PaymentRecord)
-      .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
+      .sort((a, b) => compareIsoDateDesc(a.paidAt, b.paidAt));
   }
 }

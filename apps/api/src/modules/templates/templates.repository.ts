@@ -1,4 +1,5 @@
 import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
+import { compareIsoDateDesc } from "../../core/sort.js";
 import type { Template } from "./templates.types.js";
 
 const COLLECTION = "templates";
@@ -15,7 +16,7 @@ export class TemplatesRepository {
     const querySnap = await this.db.collection(COLLECTION).where("workspaceId", "==", workspaceId).get();
     return querySnap.docs
       .map((doc) => doc.data() as Template)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => compareIsoDateDesc(a.createdAt, b.createdAt));
   }
 
   public async findById(workspaceId: string, templateId: string): Promise<Template | null> {
@@ -28,4 +29,3 @@ export class TemplatesRepository {
     return template.workspaceId === workspaceId ? template : null;
   }
 }
-

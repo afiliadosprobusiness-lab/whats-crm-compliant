@@ -107,6 +107,36 @@ export class RemindersService {
     return completed;
   }
 
+  public async deleteReminder(
+    workspaceId: string,
+    actor: AuditActor | null,
+    reminderId: string,
+  ): Promise<Reminder> {
+    const deleted = await this.remindersRepository.deleteReminder(workspaceId, reminderId);
+    if (!deleted) {
+      throw new AppError({
+        statusCode: 404,
+        code: "NOT_FOUND",
+        message: "Recordatorio no encontrado",
+      });
+    }
+
+    await this.safeAudit(workspaceId, actor, {
+      scope: "reminder",
+      action: "deleted",
+      entityType: "reminder",
+      entityId: deleted.id,
+      summary: "Recordatorio eliminado",
+      details: {
+        leadId: deleted.leadId,
+        dueAt: deleted.dueAt,
+        deletedAt: new Date().toISOString(),
+      },
+    });
+
+    return deleted;
+  }
+
   private async safeAudit(
     workspaceId: string,
     actor: AuditActor | null,

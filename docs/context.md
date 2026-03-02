@@ -39,10 +39,11 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
     - barra de acciones sobre la caja de mensaje con accesos rapidos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos con colores de estado
     - ayudas hover (`title`) en controles clave del popup y panel embebido para explicar para que sirve cada opcion y como operarla
     - tutorial del panel embebido con checklist operativo + guia completa de funciones (donde usar cada modulo y pasos recomendados)
-    - cabecera del panel con campana de alertas de recordatorios vencidos (badge rojo), centro de avisos con acciones rapidas (`Abrir chat`/`Completar`), mini modal emergente y sonido de alerta al recibir eventos de vencimiento
+    - cabecera del panel con campana de alertas de recordatorios vencidos (badge rojo), centro de avisos con acciones rapidas (`Abrir chat`/`Completar`/`Eliminar`), mini modal emergente y sonido de alerta al recibir eventos de vencimiento
     - feedback de acciones reforzado: confirmaciones visuales de exito/error en panel embebido (toast) y popup para evitar dudas de guardado/ejecucion
     - asociacion automatica chat -> lead con prioridad por telefono y memoria de contexto por workspace (fallback por nombre unico), incluyendo autocompletado de telefono al guardar lead nuevo cuando el chat expone numero y mini modal de captura ("Pegar numero y guardar") cuando no se detecta automaticamente
     - sincronizacion dinamica de datos del workspace (templates/leads/reminders/compliance) sin recargar pagina, con auto-refresh por intervalo y al volver foco/visibilidad
+    - degradacion defensiva en popup/panel: si `/reminders` falla de forma aislada, el resto del CRM sigue operativo y la sesion local no se invalida visualmente
     - sincronizacion instantanea popup -> panel embebido via `chrome.storage` (`crm_workspace_refresh_tick`) para reflejar cambios en caliente tras guardar entidades
     - modo privacidad `Blur demo` para ocultar chats/mensajes durante demos
     - bloque `Copiloto asistido` (sugerir respuesta, resumir lead, siguiente accion y derivacion humana) sin auto-envio
@@ -119,6 +120,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
   - `POST /api/v1/reminders`
   - `GET /api/v1/reminders`
   - `PATCH /api/v1/reminders/:reminderId/complete`
+  - `DELETE /api/v1/reminders/:reminderId`
 - Compliance:
   - `GET /api/v1/compliance/trust-center`
   - `GET /api/v1/compliance/messaging-mode`
@@ -170,7 +172,7 @@ Construir un CRM de WhatsApp MVP, inspirado en extensiones comerciales tipo Drag
 - Acciones de Copiloto asistido limitadas por usuario/minuto (`MAX_MANUAL_ASSIST_ACTIONS_PER_MINUTE`).
 - El panel en WhatsApp Web solo inserta texto en composer; el envio final queda manual por el usuario.
 - Recordatorios vencidos disparan notificacion local en Chrome (polling por `chrome.alarms`), con deduplicacion local para evitar alertas repetidas.
-- Recordatorios permiten cierre manual trazable (`PATCH /api/v1/reminders/:reminderId/complete`).
+- Recordatorios permiten cierre y eliminacion manual trazable (`PATCH /api/v1/reminders/:reminderId/complete`, `DELETE /api/v1/reminders/:reminderId`).
 - Seguimientos asistidos desde panel embebido mantienen limite diario local (`20`) y no ejecutan envio automatico.
 - Eventos criticos de CRM/compliance se registran en `audit_logs` para trazabilidad operativa.
 - CORS restringido por `APP_ORIGIN`.

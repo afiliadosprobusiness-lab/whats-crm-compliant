@@ -1,4 +1,5 @@
 import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
+import { compareIsoDateDesc } from "../../core/sort.js";
 
 export type WebhookEvent = {
   id: string;
@@ -20,8 +21,7 @@ export class WebhookEventsRepository {
     const querySnap = await this.db.collection(COLLECTION).limit(limitCount).get();
     return querySnap.docs
       .map((doc) => doc.data() as WebhookEvent)
-      .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+      .sort((a, b) => compareIsoDateDesc(a.receivedAt, b.receivedAt))
       .slice(0, limitCount);
   }
 }
-

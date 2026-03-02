@@ -1,4 +1,5 @@
 import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
+import { compareIsoDateAsc } from "../../core/sort.js";
 import type { Reminder } from "./reminders.types.js";
 
 const COLLECTION = "reminders";
@@ -15,7 +16,7 @@ export class RemindersRepository {
     const querySnap = await this.db.collection(COLLECTION).where("workspaceId", "==", workspaceId).get();
     return querySnap.docs
       .map((doc) => doc.data() as Reminder)
-      .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+      .sort((a, b) => compareIsoDateAsc(a.dueAt, b.dueAt));
   }
 
   public async findById(workspaceId: string, reminderId: string): Promise<Reminder | null> {
@@ -46,5 +47,15 @@ export class RemindersRepository {
 
     await this.db.collection(COLLECTION).doc(reminderId).set(updated);
     return updated;
+  }
+
+  public async deleteReminder(workspaceId: string, reminderId: string): Promise<Reminder | null> {
+    const reminder = await this.findById(workspaceId, reminderId);
+    if (!reminder) {
+      return null;
+    }
+
+    await this.db.collection(COLLECTION).doc(reminderId).delete();
+    return reminder;
   }
 }

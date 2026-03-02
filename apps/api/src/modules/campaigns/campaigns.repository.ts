@@ -1,4 +1,5 @@
 import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
+import { compareIsoDateDesc } from "../../core/sort.js";
 import type { Campaign, OutboundMessageLog } from "./campaigns.types.js";
 
 const COLLECTION = "campaigns";
@@ -16,7 +17,7 @@ export class CampaignsRepository {
     const querySnap = await this.db.collection(COLLECTION).where("workspaceId", "==", workspaceId).get();
     return querySnap.docs
       .map((doc) => doc.data() as Campaign)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => compareIsoDateDesc(a.createdAt, b.createdAt));
   }
 
   public async findById(workspaceId: string, campaignId: string): Promise<Campaign | null> {

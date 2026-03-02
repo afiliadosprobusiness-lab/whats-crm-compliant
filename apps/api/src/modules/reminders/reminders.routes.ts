@@ -11,6 +11,10 @@ export const createRemindersRouter = (remindersController: RemindersController):
     "/:reminderId/complete",
     asyncHandler(async (req, res) => remindersController.completeReminder(req, res)),
   );
+  router.delete(
+    "/:reminderId",
+    asyncHandler(async (req, res) => remindersController.deleteReminder(req, res)),
+  );
 
   return router;
 };

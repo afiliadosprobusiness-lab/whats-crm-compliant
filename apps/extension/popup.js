@@ -77,8 +77,11 @@ const I18N = {
     campaign_sent: "Campaign sent.",
     reminder_created: "Reminder created.",
     reminder_completed: "Reminder completed.",
+    reminder_deleted: "Reminder deleted.",
     campaign_recipients_required: "Select at least one opted_in lead.",
     reminder_invalid_date: "Invalid date/time for reminder.",
+    session_restoring: "Restoring session...",
+    session_retained: "Session saved. Retry when the backend responds.",
     csv_processing: "Importing CSV...",
     csv_no_rows: "CSV has no valid rows.",
     csv_import_result: "CSV import completed.",
@@ -183,8 +186,11 @@ const I18N = {
     campaign_sent: "Campanha enviada.",
     reminder_created: "Lembrete criado.",
     reminder_completed: "Lembrete concluido.",
+    reminder_deleted: "Lembrete removido.",
     campaign_recipients_required: "Selecione pelo menos um lead opted_in.",
     reminder_invalid_date: "Data/hora invalida para lembrete.",
+    session_restoring: "Restaurando sessao...",
+    session_retained: "Sessao salva. Tente novamente quando o backend responder.",
     csv_processing: "Importando CSV...",
     csv_no_rows: "CSV sem linhas validas.",
     csv_import_result: "Importacao CSV concluida.",
@@ -637,6 +643,18 @@ const optionalApiRequest = async (capabilityKey, path, fallbackValue) => {
       return fallbackValue;
     }
     throw error;
+  }
+};
+
+const loadRemindersSafely = async () => {
+  try {
+    return await apiRequest("/reminders");
+  } catch (error) {
+    const statusCode = Number(error?.statusCode || 0);
+    if (statusCode === 401 || statusCode === 403) {
+      throw error;
+    }
+    return { reminders: [] };
   }
 };
 
@@ -1134,12 +1152,34 @@ const renderReminders = () => {
       completeBtn.disabled = reminder.status === "done";
       completeBtn.addEventListener("click", async () => {
         try {
-          await apiRequest(`/reminders/${reminder.id}/complete`, {
+          const result = await apiRequest(`/reminders/${reminder.id}/complete`, {
             method: "PATCH",
             body: JSON.stringify({}),
           });
+          state.reminders = state.reminders.map((item) =>
+            item.id === reminder.id ? result.reminder || item : item,
+          );
+          renderReminders();
           setFeedback(tr("reminder_completed", "Recordatorio completado."));
-          await refreshData();
+          await announceWorkspaceRefresh(false);
+        } catch (error) {
+          setFeedback(error.message, true);
+        }
+      });
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "btn-xs btn-ghost";
+      deleteBtn.textContent = tr("delete_btn", "Eliminar");
+      deleteBtn.addEventListener("click", async () => {
+        try {
+          await apiRequest(`/reminders/${reminder.id}`, {
+            method: "DELETE",
+          });
+          state.reminders = state.reminders.filter((item) => item.id !== reminder.id);
+          renderReminders();
+          setFeedback(tr("reminder_deleted", "Recordatorio eliminado."));
+          await announceWorkspaceRefresh(false);
         } catch (error) {
           setFeedback(error.message, true);
         }
@@ -1148,6 +1188,7 @@ const renderReminders = () => {
       actions.appendChild(calendarBtn);
       actions.appendChild(chatBtn);
       actions.appendChild(completeBtn);
+      actions.appendChild(deleteBtn);
       li.appendChild(meta);
       li.appendChild(actions);
       listEl.appendChild(li);
@@ -1422,7 +1463,7 @@ const refreshData = async () => {
     apiRequest("/leads"),
     apiRequest("/templates"),
     apiRequest("/campaigns"),
-    apiRequest("/reminders"),
+    loadRemindersSafely(),
   ]);
   const [complianceData, usersData, inboxData, analyticsData, modeData] = await Promise.all([
     optionalApiRequest("complianceTrustCenter", "/compliance/trust-center", { trustCenter: null }),
@@ -2222,6 +2263,8 @@ const bootstrap = async () => {
     return;
   }
 
+  sessionLabelEl.textContent = tr("session_restoring", "Restaurando sesion...");
+
   try {
     await bootstrapAuthenticated();
   } catch (error) {
@@ -2231,6 +2274,7 @@ const bootstrap = async () => {
       setFeedback(`${tr("session_invalid", "Sesion invalida:")} ${error.message}`, true);
       return;
     }
+    sessionLabelEl.textContent = tr("session_retained", "Sesion guardada. Reintenta cuando el backend responda.");
     setFeedback(`No se pudo completar la carga inicial: ${error.message}`, true);
   }
 };

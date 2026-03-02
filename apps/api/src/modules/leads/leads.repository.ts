@@ -1,4 +1,5 @@
 import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
+import { compareIsoDateDesc } from "../../core/sort.js";
 import type { Lead, LeadHealthEvent, LeadStage } from "./leads.types.js";
 
 const COLLECTION = "leads";
@@ -16,7 +17,7 @@ export class LeadsRepository {
     const querySnap = await this.db.collection(COLLECTION).where("workspaceId", "==", workspaceId).get();
     return querySnap.docs
       .map((doc) => doc.data() as Lead)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => compareIsoDateDesc(a.createdAt, b.createdAt));
   }
 
   public async findById(workspaceId: string, leadId: string): Promise<Lead | null> {
@@ -110,6 +111,6 @@ export class LeadsRepository {
 
     return querySnap.docs
       .map((doc) => doc.data() as LeadHealthEvent)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => compareIsoDateDesc(a.createdAt, b.createdAt));
   }
 }

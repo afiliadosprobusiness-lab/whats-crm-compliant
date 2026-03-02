@@ -42,6 +42,7 @@ Proyecto: `whatsapp-crm-compliant`
 6. Recordatorios:
    - Creacion por lead con fecha/hora.
    - Cierre manual trazable (`PATCH /api/v1/reminders/:reminderId/complete`).
+   - Eliminacion manual (`DELETE /api/v1/reminders/:reminderId`) para limpiar vencidos o irrelevantes.
    - Notificacion de escritorio en Chrome cuando el recordatorio vence (sin auto-envio).
 7. Compliance:
    - `Trust Center` (`GET /api/v1/compliance/trust-center`) con cobertura opt-in, cuota diaria, riesgo anti-spam y auditoria reciente.
@@ -77,6 +78,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido con UX modular: tabs superiores + barras de atajos junto al composer, tutorial con checklist persistente y vista de leads calientes del dia.
   - Panel embebido arrastrable; doble clic en la barra superior reinicia posicion automatica.
   - Cabecera del panel embebido agrega campana de recordatorios vencidos con badge rojo, mini aviso emergente, sonido de alerta y centro de avisos con acciones rapidas (`Abrir chat`, `Completar`).
+  - El centro de avisos de recordatorios vencidos permite tambien `Eliminar` para limpiar pendientes antiguos desde WhatsApp Web.
   - Popup y panel embebido refuerzan confirmaciones de acciones (guardado/actualizacion/error) con feedback visual explicito para reducir incertidumbre operativa.
   - Panel embebido agrega barra de estado/atajos junto al input (debajo del composer) con estado vivo de lead/compliance/modo y acciones (`Guardar`, `Resumen`, `CRM`) con paleta visual activa.
   - Panel embebido agrega barra de acciones sobre la caja de mensaje con atajos (`Plantilla`, `Sugerir + insertar`, `Seguimiento`, `Recordatorio +24h`) y guia contextual por accion/requisitos con colores de estado, manteniendo envio manual.
@@ -84,6 +86,7 @@ Proyecto: `whatsapp-crm-compliant`
   - Panel embebido refuerza `Tutorial` con checklist y guia completa de funciones (modulo + flujo recomendado de uso).
   - Panel embebido asocia automaticamente chat -> lead priorizando telefono y memoria de contexto por workspace (fallback por nombre unico), autocompleta telefono al guardar leads nuevos cuando el chat expone numero y abre mini modal de captura ("Pegar numero y guardar") cuando no se detecta telefono.
   - Panel embebido sincroniza datos en caliente sin recargar (templates/leads/reminders/compliance), con auto-refresh por intervalo y refresco inmediato al recuperar foco.
+  - Popup y panel degradan de forma segura si falla `GET /api/v1/reminders`: mantienen la sesion local y siguen operativos con lista de recordatorios vacia hasta el siguiente refresh exitoso.
   - Popup y panel embebido propagan refresco inmediato via storage key `crm_workspace_refresh_tick` para reflejar altas/cambios sin recargar.
   - `background service worker` de extension para polling de recordatorios vencidos (`chrome.alarms`) y alertas nativas (`chrome.notifications`).
   - Estado de sesion.

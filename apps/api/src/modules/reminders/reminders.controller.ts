@@ -62,4 +62,20 @@ export class RemindersController {
     const reminder = await this.remindersService.completeReminder(workspaceId, actor, reminderId);
     res.status(200).json({ reminder });
   };
+
+  public deleteReminder = async (req: Request, res: Response): Promise<void> => {
+    const reminderId = req.params.reminderId;
+    if (!reminderId) {
+      throw new AppError({
+        statusCode: 400,
+        code: "VALIDATION_ERROR",
+        message: "reminderId requerido",
+      });
+    }
+
+    const workspaceId = getWorkspaceId(res);
+    const actor = getActor(res);
+    const reminder = await this.remindersService.deleteReminder(workspaceId, actor, reminderId);
+    res.status(200).json({ ok: true, reminder });
+  };
 }

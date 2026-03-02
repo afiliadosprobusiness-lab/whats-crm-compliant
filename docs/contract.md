@@ -655,6 +655,22 @@ Response `200`:
 }
 ```
 
+### `DELETE /api/v1/reminders/:reminderId`
+
+Response `200`:
+
+```json
+{
+  "ok": true,
+  "reminder": {
+    "id": "rem_...",
+    "leadId": "lead_...",
+    "status": "pending",
+    "dueAt": "2026-03-01T16:00:00.000Z"
+  }
+}
+```
+
 ## Compliance
 
 ### `GET /api/v1/compliance/trust-center`
@@ -852,6 +868,11 @@ Posibles errores:
 - Cambio: se agregan `PATCH /api/v1/reminders/:reminderId/complete`, `POST /api/v1/campaigns/preflight`, `POST /api/v1/campaigns/:campaignId/preflight`, `GET /api/v1/compliance/trust-center` y `POST /api/v1/compliance/manual-assist`
 - Tipo: non-breaking
 - Impacto: agrega preflight de campanas, trust center de cumplimiento, rate limit por usuario/minuto para acciones asistidas y cierre trazable de recordatorios
+
+- Fecha: 2026-03-02
+- Cambio: se agrega `DELETE /api/v1/reminders/:reminderId`
+- Tipo: non-breaking
+- Impacto: permite limpiar recordatorios vencidos o irrelevantes sin romper el flujo existente de cierre manual
 
 - Fecha: 2026-03-01
 - Cambio: se agregan `GET /api/v1/leads/inbox`, `PATCH /api/v1/leads/:leadId/assign`, `POST /api/v1/leads/:leadId/health-events`, `GET /api/v1/compliance/messaging-mode` y `GET /api/v1/analytics/productivity`; ademas se extiende `lead` con owner/health/SLA

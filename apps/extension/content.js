@@ -430,6 +430,18 @@
     }
   };
 
+  const loadRemindersSafely = async () => {
+    try {
+      return await apiRequest("/reminders");
+    } catch (error) {
+      const statusCode = Number(error?.statusCode || 0);
+      if (statusCode === 401 || statusCode === 403) {
+        throw error;
+      }
+      return { reminders: [] };
+    }
+  };
+
   const resetApiCapabilities = () => {
     state.apiCapabilities = {
       complianceTrustCenter: true,
@@ -3285,7 +3297,7 @@
     ] = await Promise.all([
       apiRequest("/templates"),
       apiRequest("/leads"),
-      apiRequest("/reminders"),
+      loadRemindersSafely(),
       optionalApiRequest("complianceTrustCenter", "/compliance/trust-center", { trustCenter: null }),
       optionalApiRequest("authUsers", "/auth/users", { users: [] }),
       optionalApiRequest("leadsInbox", `/leads/inbox?view=${encodeURIComponent(safeView)}`, { inbox: null }),
@@ -3576,8 +3588,16 @@
       doneBtn.dataset.reminderAction = "complete";
       doneBtn.dataset.reminderId = String(reminder?.id || "");
 
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "wacrm-btn ghost wacrm-btn-xs";
+      deleteBtn.textContent = "Eliminar";
+      deleteBtn.dataset.reminderAction = "delete";
+      deleteBtn.dataset.reminderId = String(reminder?.id || "");
+
       actions.appendChild(openBtn);
       actions.appendChild(doneBtn);
+      actions.appendChild(deleteBtn);
       row.appendChild(actions);
       listEl.appendChild(row);
     });
@@ -4612,12 +4632,34 @@
           return;
         }
         void withSyncGuard(async () => {
-          await apiRequest(`/reminders/${encodeURIComponent(reminderId)}/complete`, {
+          const result = await apiRequest(`/reminders/${encodeURIComponent(reminderId)}/complete`, {
             method: "PATCH",
             body: JSON.stringify({}),
           });
+          state.reminders = (Array.isArray(state.reminders) ? state.reminders : []).map((item) =>
+            String(item?.id || "") === reminderId ? result.reminder || item : item,
+          );
+          renderReminderAlerts();
           setStatus("Recordatorio completado.", false, { toast: true });
-          await fetchWorkspaceData();
+          await refreshFollowupMeta();
+        });
+        return;
+      }
+      if (action === "delete") {
+        const reminderId = String(actionBtn.dataset.reminderId || "").trim();
+        if (!reminderId) {
+          return;
+        }
+        void withSyncGuard(async () => {
+          await apiRequest(`/reminders/${encodeURIComponent(reminderId)}`, {
+            method: "DELETE",
+          });
+          state.reminders = (Array.isArray(state.reminders) ? state.reminders : []).filter(
+            (item) => String(item?.id || "") !== reminderId,
+          );
+          renderReminderAlerts();
+          setStatus("Recordatorio eliminado.", false, { toast: true });
+          await refreshFollowupMeta();
         });
       }
     });

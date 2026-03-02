@@ -1,4 +1,5 @@
 import { getFirebaseDb } from "../../infrastructure/firebase-admin.js";
+import { compareIsoDateDesc } from "../../core/sort.js";
 import type { AuditLog } from "./audit.types.js";
 
 const COLLECTION = "audit_logs";
@@ -15,6 +16,6 @@ export class AuditRepository {
     const querySnap = await this.db.collection(COLLECTION).where("workspaceId", "==", workspaceId).get();
     return querySnap.docs
       .map((doc) => doc.data() as AuditLog)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => compareIsoDateDesc(a.createdAt, b.createdAt));
   }
 }

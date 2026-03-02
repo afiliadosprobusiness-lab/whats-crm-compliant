@@ -1,5 +1,6 @@
 import type { AuthRepository } from "../auth/auth.repository.js";
 import type { CampaignsRepository } from "../campaigns/campaigns.repository.js";
+import { compareTextAsc } from "../../core/sort.js";
 import type { Lead } from "../leads/leads.types.js";
 import { leadHealthTemperatures, leadStages } from "../leads/leads.types.js";
 import type { LeadsRepository } from "../leads/leads.repository.js";
@@ -93,7 +94,7 @@ export class AnalyticsService {
         if (b.wonLeads !== a.wonLeads) {
           return b.wonLeads - a.wonLeads;
         }
-        return a.name.localeCompare(b.name);
+        return compareTextAsc(a.name, b.name);
       });
 
     return {
